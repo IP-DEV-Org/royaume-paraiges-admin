@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -142,7 +142,7 @@ export default function QuestsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchQuests = async () => {
+  const fetchQuests = useCallback(async () => {
     try {
       const data = await getQuests();
       setQuests(data);
@@ -155,11 +155,11 @@ export default function QuestsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchQuests();
-  }, []);
+  }, [fetchQuests]);
 
   // Fetch archive stats when archives are expanded
   useEffect(() => {

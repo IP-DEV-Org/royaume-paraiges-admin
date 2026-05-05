@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -53,7 +53,7 @@ export default function UsersPage() {
 
   const limit = 20;
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const [usersResult, statsResult] = await Promise.all([
@@ -72,11 +72,11 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, page, toast]);
 
   useEffect(() => {
     fetchUsers();
-  }, [filters, page]);
+  }, [fetchUsers]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -98,7 +98,7 @@ export default function UsersPage() {
       <div>
         <h1 className="text-3xl font-bold">Utilisateurs</h1>
         <p className="text-muted-foreground">
-          Gestion des utilisateurs de l'application
+          Gestion des utilisateurs de l’application
         </p>
       </div>
 

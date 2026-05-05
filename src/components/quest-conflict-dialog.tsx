@@ -83,7 +83,7 @@ export function QuestConflictDialog({ open, onOpenChange, details }: QuestConfli
               <li>Désactivez la quête en conflit, puis réessayez.</li>
               <li>
                 Ou modifiez la signature (type, période, consommation) de la quête que vous
-                éditez pour qu'elle diffère.
+                éditez pour qu’elle diffère.
               </li>
               <li>
                 Ou scopez les deux quêtes sur des établissements <em>disjoints</em> (pas de

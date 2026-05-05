@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -49,7 +49,7 @@ export default function HistoryPage() {
 
   const limit = 30;
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
       const { data, count } = await getDistributionLogs(limit, page * limit, filters);
@@ -64,11 +64,11 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, filters, toast]);
 
   useEffect(() => {
     fetchLogs();
-  }, [filters, page]);
+  }, [fetchLogs]);
 
   const totalPages = Math.ceil(total / limit);
 

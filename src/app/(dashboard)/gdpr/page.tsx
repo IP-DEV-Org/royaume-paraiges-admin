@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -64,7 +64,7 @@ export default function GdprPage() {
   const [exportingId, setExportingId] = useState<string | null>(null);
   const pageSize = 20;
 
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     try {
       setLoading(true);
       const { data, count } = await getGdprRequests(
@@ -83,11 +83,11 @@ export default function GdprPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, statusFilter, toast]);
 
   useEffect(() => {
     loadRequests();
-  }, [page, statusFilter]);
+  }, [loadRequests]);
 
   const handleExport = async (userId: string) => {
     try {

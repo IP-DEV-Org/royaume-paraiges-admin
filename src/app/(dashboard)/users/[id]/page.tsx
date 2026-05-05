@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -307,42 +307,7 @@ export default function UserDetailPage() {
     fetchData();
   }, [userId, router, toast]);
 
-  // Load coupons when tab is selected
-  useEffect(() => {
-    if (activeTab === "coupons") {
-      fetchCoupons();
-    }
-  }, [activeTab, couponsPage]);
-
-  // Load receipts when tab is selected
-  useEffect(() => {
-    if (activeTab === "receipts") {
-      fetchReceipts();
-    }
-  }, [activeTab, receiptsPage]);
-
-  // Load gains when tab is selected or page/filter changes
-  useEffect(() => {
-    if (activeTab === "gains") {
-      fetchGains();
-    }
-  }, [activeTab, gainsPage, gainsSourceFilter]);
-
-  // Load quest progress when activity tab is selected or page/filters change
-  useEffect(() => {
-    if (activeTab === "activity") {
-      fetchQuestProgress();
-    }
-  }, [activeTab, questProgressPage, questPeriodTypeFilter, questStatusFilter]);
-
-  // Load activity stats when tab is selected or period changes
-  useEffect(() => {
-    if (activeTab === "activity") {
-      fetchActivityStats();
-    }
-  }, [activeTab, activityPeriod]);
-
-  const fetchActivityStats = async () => {
+  const fetchActivityStats = useCallback(async () => {
     setLoadingActivity(true);
     try {
       const [data, daily] = await Promise.all([
@@ -360,9 +325,9 @@ export default function UserDetailPage() {
     } finally {
       setLoadingActivity(false);
     }
-  };
+  }, [userId, activityPeriod, toast]);
 
-  const fetchGains = async () => {
+  const fetchGains = useCallback(async () => {
     setLoadingGains(true);
     try {
       const result = await getUserGains(
@@ -382,9 +347,9 @@ export default function UserDetailPage() {
     } finally {
       setLoadingGains(false);
     }
-  };
+  }, [userId, gainsPage, gainsSourceFilter, toast]);
 
-  const fetchQuestProgress = async () => {
+  const fetchQuestProgress = useCallback(async () => {
     setLoadingQuestProgress(true);
     try {
       const result = await getUserQuestProgress(
@@ -405,9 +370,9 @@ export default function UserDetailPage() {
     } finally {
       setLoadingQuestProgress(false);
     }
-  };
+  }, [userId, questProgressPage, questPeriodTypeFilter, questStatusFilter, toast]);
 
-  const fetchCoupons = async () => {
+  const fetchCoupons = useCallback(async () => {
     setLoadingCoupons(true);
     try {
       const result = await getUserCoupons(userId, limit, couponsPage * limit);
@@ -422,9 +387,9 @@ export default function UserDetailPage() {
     } finally {
       setLoadingCoupons(false);
     }
-  };
+  }, [userId, couponsPage, toast]);
 
-  const fetchReceipts = async () => {
+  const fetchReceipts = useCallback(async () => {
     setLoadingReceipts(true);
     try {
       const result = await getUserReceipts(userId, limit, receiptsPage * limit);
@@ -439,7 +404,42 @@ export default function UserDetailPage() {
     } finally {
       setLoadingReceipts(false);
     }
-  };
+  }, [userId, receiptsPage, toast]);
+
+  // Load coupons when tab is selected
+  useEffect(() => {
+    if (activeTab === "coupons") {
+      fetchCoupons();
+    }
+  }, [activeTab, fetchCoupons]);
+
+  // Load receipts when tab is selected
+  useEffect(() => {
+    if (activeTab === "receipts") {
+      fetchReceipts();
+    }
+  }, [activeTab, fetchReceipts]);
+
+  // Load gains when tab is selected or page/filter changes
+  useEffect(() => {
+    if (activeTab === "gains") {
+      fetchGains();
+    }
+  }, [activeTab, fetchGains]);
+
+  // Load quest progress when activity tab is selected or page/filters change
+  useEffect(() => {
+    if (activeTab === "activity") {
+      fetchQuestProgress();
+    }
+  }, [activeTab, fetchQuestProgress]);
+
+  // Load activity stats when tab is selected or period changes
+  useEffect(() => {
+    if (activeTab === "activity") {
+      fetchActivityStats();
+    }
+  }, [activeTab, fetchActivityStats]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1009,7 +1009,7 @@ export default function UserDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Gains de l'utilisateur</CardTitle>
+                  <CardTitle>Gains de l’utilisateur</CardTitle>
                   <CardDescription>
                     {gainsTotal} gain{gainsTotal > 1 ? "s" : ""} au total
                   </CardDescription>
@@ -1146,7 +1146,7 @@ export default function UserDetailPage() {
         <TabsContent value="coupons">
           <Card>
             <CardHeader>
-              <CardTitle>Coupons de l'utilisateur</CardTitle>
+              <CardTitle>Coupons de l’utilisateur</CardTitle>
               <CardDescription>
                 {couponsTotal} coupon{couponsTotal > 1 ? "s" : ""} au total
               </CardDescription>
@@ -1251,7 +1251,7 @@ export default function UserDetailPage() {
         <TabsContent value="receipts">
           <Card>
             <CardHeader>
-              <CardTitle>Tickets de l'utilisateur</CardTitle>
+              <CardTitle>Tickets de l’utilisateur</CardTitle>
               <CardDescription>
                 {receiptsTotal} ticket{receiptsTotal > 1 ? "s" : ""} au total
               </CardDescription>
@@ -1367,7 +1367,7 @@ export default function UserDetailPage() {
               <CardHeader>
                 <CardTitle>Informations personnelles</CardTitle>
                 <CardDescription>
-                  Modifier les informations de l'utilisateur
+                  Modifier les informations de l’utilisateur
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -1403,7 +1403,7 @@ export default function UserDetailPage() {
                     className="bg-muted"
                   />
                   <p className="text-xs text-muted-foreground">
-                    L'email ne peut pas être modifié depuis cette interface
+                    L’email ne peut pas être modifié depuis cette interface
                   </p>
                 </div>
 

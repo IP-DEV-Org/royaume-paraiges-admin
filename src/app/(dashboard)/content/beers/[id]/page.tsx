@@ -272,7 +272,7 @@ export default function EditBeerPage() {
                         : "Importer une image"}
                     </span>
                     <span className="mt-1 text-xs text-muted-foreground">
-                      PNG, JPG jusqu'à 5MB
+                      PNG, JPG jusqu’à 5MB
                     </span>
                   </label>
                   <input
@@ -299,12 +299,12 @@ export default function EditBeerPage() {
                   max={120}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Indice d'amertume (0-120)
+                  Indice d’amertume (0-120)
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="abv">ABV (Degré d'alcool %)</Label>
+                <Label htmlFor="abv">ABV (Degré d’alcool %)</Label>
                 <Input
                   id="abv"
                   type="number"
@@ -316,7 +316,7 @@ export default function EditBeerPage() {
                   max={20}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Pourcentage d'alcool par volume
+                  Pourcentage d’alcool par volume
                 </p>
               </div>
             </div>

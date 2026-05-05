@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -80,7 +80,7 @@ export default function ReceiptsPage() {
 
   const limit = 20;
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [receiptsResult, statsResult, establishmentsResult] = await Promise.all([
@@ -101,11 +101,11 @@ export default function ReceiptsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, page, toast]);
 
   useEffect(() => {
     fetchData();
-  }, [filters, page]);
+  }, [fetchData]);
 
   const getEstablishmentName = (id: number) => {
     const establishment = establishments.find((e) => e.id === id);

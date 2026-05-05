@@ -310,7 +310,7 @@ export default function SeasonClosurePage() {
         <CardHeader>
           <CardTitle>Étapes de clôture</CardTitle>
           <CardDescription>
-            Chaque étape est idempotente et a une garde sur la précédente. À lancer dans l'ordre.
+            Chaque étape est idempotente et a une garde sur la précédente. À lancer dans l’ordre.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -343,7 +343,7 @@ export default function SeasonClosurePage() {
       {/* Journal */}
       <Card>
         <CardHeader>
-          <CardTitle>Journal d'exécution — saison {selectedYear}</CardTitle>
+          <CardTitle>Journal d’exécution — saison {selectedYear}</CardTitle>
           <CardDescription>Historique des étapes lancées (manuel, cron, fallback).</CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -74,7 +74,7 @@ export default function RewardsPage() {
   const [savingLore, setSavingLore] = useState(false);
   const { toast } = useToast();
 
-  const fetchTiers = async () => {
+  const fetchTiers = useCallback(async () => {
     try {
       const data = await getRewardTiers();
       setTiers(data as RewardTierWithRelations[]);
@@ -87,11 +87,11 @@ export default function RewardsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchTiers();
-  }, []);
+  }, [fetchTiers]);
 
   useEffect(() => {
     const fetchBadges = async () => {

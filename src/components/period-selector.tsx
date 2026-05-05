@@ -151,6 +151,8 @@ export function PeriodSelector({
       const { start, end } = getPresetDates(defaultPreset);
       emitChange(start, end);
     }
+    // Mount-only init: defaultPreset/emitChange must not retrigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handlePresetChange = useCallback(

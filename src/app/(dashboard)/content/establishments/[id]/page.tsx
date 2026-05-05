@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -160,14 +160,7 @@ export default function EditEstablishmentPage() {
     fetchEmployees();
   }, [id]);
 
-  // Load stats when tab is active or filters change
-  useEffect(() => {
-    if (activeTab === "stats") {
-      fetchStats();
-    }
-  }, [activeTab, statsPeriod, selectedEmployeeId]);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoadingStats(true);
     try {
       const filters = {
@@ -191,7 +184,14 @@ export default function EditEstablishmentPage() {
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [statsPeriod, selectedEmployeeId, id, toast]);
+
+  // Load stats when tab is active or filters change
+  useEffect(() => {
+    if (activeTab === "stats") {
+      fetchStats();
+    }
+  }, [activeTab, fetchStats]);
 
   const handleFeaturedImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -296,7 +296,7 @@ export default function EditEstablishmentPage() {
         </Link>
         <div>
           <h1 className="text-3xl font-bold">{form.title || "Établissement"}</h1>
-          <p className="text-muted-foreground">Gestion de l'établissement</p>
+          <p className="text-muted-foreground">Gestion de l’établissement</p>
         </div>
       </div>
 
@@ -319,12 +319,12 @@ export default function EditEstablishmentPage() {
               <CardHeader>
                 <CardTitle>Informations générales</CardTitle>
                 <CardDescription>
-                  Modifiez les informations de l'établissement
+                  Modifiez les informations de l’établissement
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="title">Nom de l'établissement *</Label>
+                  <Label htmlFor="title">Nom de l’établissement *</Label>
                   <Input
                     id="title"
                     placeholder="Ex: Le Royaume des Paraiges"
@@ -374,7 +374,7 @@ export default function EditEstablishmentPage() {
                     }
                   />
                   <p className="text-xs text-muted-foreground">
-                    Date de création ou d'ouverture de l'établissement
+                    Date de création ou d’ouverture de l’établissement
                   </p>
                 </div>
               </CardContent>
@@ -384,7 +384,7 @@ export default function EditEstablishmentPage() {
               <CardHeader>
                 <CardTitle>Images</CardTitle>
                 <CardDescription>
-                  Image principale et logo de l'établissement
+                  Image principale et logo de l’établissement
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -427,7 +427,7 @@ export default function EditEstablishmentPage() {
                             : "Importer une image"}
                         </span>
                         <span className="mt-1 text-xs text-muted-foreground">
-                          PNG, JPG, WebP, AVIF jusqu'à 5MB
+                          PNG, JPG, WebP, AVIF jusqu’à 5MB
                         </span>
                       </label>
                       <input
@@ -480,7 +480,7 @@ export default function EditEstablishmentPage() {
                             : "Importer un logo"}
                         </span>
                         <span className="mt-1 text-xs text-muted-foreground">
-                          PNG, JPG, WebP, AVIF jusqu'à 2MB
+                          PNG, JPG, WebP, AVIF jusqu’à 2MB
                         </span>
                       </label>
                       <input
@@ -500,7 +500,7 @@ export default function EditEstablishmentPage() {
               <CardHeader>
                 <CardTitle>Adresse</CardTitle>
                 <CardDescription>
-                  Localisation de l'établissement
+                  Localisation de l’établissement
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">

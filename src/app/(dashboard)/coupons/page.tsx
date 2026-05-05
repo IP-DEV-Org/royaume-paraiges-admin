@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -126,7 +126,7 @@ export default function RewardsPage() {
 
   const limit = 20;
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const promises: Promise<void>[] = [];
@@ -161,11 +161,11 @@ export default function RewardsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [rewardTypeFilter, couponFilters, toast]);
 
   useEffect(() => {
     fetchData();
-  }, [rewardTypeFilter, couponFilters]);
+  }, [fetchData]);
 
   // Reset page when filters change
   useEffect(() => {

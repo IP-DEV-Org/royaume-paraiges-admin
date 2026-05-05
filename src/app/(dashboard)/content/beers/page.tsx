@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader2, Beer, ExternalLink, Building2, Factory } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   getBeers,
@@ -58,7 +59,7 @@ export default function BeersPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [beersData, breweriesData] = await Promise.all([
@@ -76,11 +77,11 @@ export default function BeersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleViewEstablishments = async (beer: BeerType) => {
     setSelectedBeer(beer);
@@ -237,12 +238,14 @@ export default function BeersPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         {beer.featured_image && (
-                          <img
+                          <Image
                             src={getImageUrl(beer.featured_image, {
                               width: 40,
                               height: 40,
                             }) || ""}
                             alt={beer.title}
+                            width={40}
+                            height={40}
                             className="h-10 w-10 rounded object-cover"
                           />
                         )}
@@ -298,7 +301,7 @@ export default function BeersPage() {
             </div>
           ) : selectedEstablishments.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
-              Cette bière n'est configurée dans aucun établissement
+              Cette bière n’est configurée dans aucun établissement
             </div>
           ) : (
             <div className="max-h-[400px] overflow-y-auto">

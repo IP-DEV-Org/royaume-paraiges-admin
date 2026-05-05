@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader2, Building2, MapPin, Search, ExternalLink } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   getEstablishments,
@@ -54,7 +55,7 @@ export default function EstablishmentsPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [establishmentsData, receiptsData] = await Promise.all([
@@ -85,11 +86,11 @@ export default function EstablishmentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleViewBeers = async (establishment: EstablishmentWithStats) => {
     setSelectedEstablishment(establishment);
@@ -212,12 +213,14 @@ export default function EstablishmentsPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         {establishment.logo && (
-                          <img
+                          <Image
                             src={getImageUrl(establishment.logo, {
                               width: 40,
                               height: 40,
                             }) || ""}
                             alt={establishment.title}
+                            width={40}
+                            height={40}
                             className="h-10 w-10 rounded-full object-cover"
                           />
                         )}

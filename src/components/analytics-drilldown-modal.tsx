@@ -576,7 +576,7 @@ export function DrilldownModal({
     if (open && metric) {
       fetchData();
     }
-  }, [open, fetchData]);
+  }, [open, metric, fetchData]);
 
   // Close selection when modal closes
   useEffect(() => {
