@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -17,11 +18,13 @@ import {
   parseQuestRedundancyError,
   type QuestRedundancyDetails,
 } from "@/lib/supabase/errorParser";
+import { questKeys } from "@/lib/queries/keys";
 import type { QuestInsert } from "@/types/database";
 import { QuestForm, type QuestFormPayload } from "../_form/QuestForm";
 
 export default function CreateQuestPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [conflictDetails, setConflictDetails] =
     useState<QuestRedundancyDetails | null>(null);
 
@@ -57,6 +60,7 @@ export default function CreateQuestPage() {
         );
       }
 
+      queryClient.invalidateQueries({ queryKey: questKeys.all });
       toast.success("Quête créée avec succès");
       router.push("/quests");
     } catch (err) {

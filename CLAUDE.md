@@ -659,6 +659,84 @@ export type CouponWithRelations = Coupon & {
 };
 ```
 
+### Validation runtime (Zod) — refonte fondations 2026
+
+Tous les services qui mutent la BDD via une RPC ou un table-write valident leur input avec un schéma Zod défini dans `src/lib/schemas/` :
+
+| Service | Schéma | Couvre |
+|---------|--------|--------|
+| `couponService.createManualCoupon` | `manualCouponSchema` | UUIDs, XOR template/amount/percentage, format date YYYY-MM-DD |
+| `questService.createQuest` / `updateQuest` | `questSchema` / `questUpdateSchema` | slug regex, target positif, consumption_type cohérent, weekly+quest_completed interdit |
+| `achievementBadgeService.create` / `update` | `achievementBadgeSchema` / `achievementBadgeUpdateSchema` | slug regex, criterion_params per criterion_type, mode cron requis pour streaks |
+| `rewardService.distributeRewards` | `distributeRewardsSchema` | period_type enum, force/previewOnly booléens |
+| `seasonService.snapshot` / `awardBadges` / `reset` | `seasonClosureSchema` | year ∈ [2020, 2100], source enum |
+
+**Règle** : si tu ajoutes un nouveau service mutateur, ajoute aussi son schéma Zod dans `src/lib/schemas/` et appelle `schema.parse(input)` au début. Les schémas peuvent ensuite servir de base pour les forms côté UI.
+
+### Forms — react-hook-form + zodResolver
+
+Les forms admin migrés (avril 2026) suivent ce pattern :
+
+```typescript
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+// Schéma UI : peut différer du schéma service (champs string pour les inputs number)
+const formSchema = z.object({ /* … */ }).superRefine(/* cross-field */);
+type FormInput = z.infer<typeof formSchema>;
+
+const form = useForm<FormInput>({
+  resolver: zodResolver(formSchema),
+  defaultValues: { /* … */ },
+});
+
+const submit = form.handleSubmit(async (values) => {
+  // transform values → service payload (conversions €→centimes, etc.)
+  await service(payload);
+});
+```
+
+**Conventions** :
+- `register("name")` pour les `<Input>` simples, `<Controller>` pour les `<Select>`/`<Switch>` shadcn
+- Erreurs Zod affichées sous chaque champ via `errors.name?.message` (className `text-xs text-destructive`)
+- Erreur serveur capturée dans un state local `serverError`, affichée en bandeau au-dessus des actions
+- Toast de succès/erreur via `import { toast } from "sonner"` (pas le `useToast` shadcn)
+
+**Forms migrés à date** : `coupons/create`, `rewards/achievements/_form/AchievementBadgeForm` (shared create+edit), `quests/_form/QuestForm` (shared create+edit).
+
+### Data fetching — TanStack React Query
+
+Le `QueryProvider` est branché dans `src/app/layout.tsx` (staleTime 30s, retry 1, no refetchOnWindowFocus).
+
+**Convention des query keys** : `src/lib/queries/keys.ts` expose des factories par domaine.
+
+```typescript
+// Lecture
+const { data, isLoading } = useQuery({
+  queryKey: questKeys.lists(),
+  queryFn: getQuests,
+});
+
+// Mutation avec invalidation
+const queryClient = useQueryClient();
+await createQuest(payload);
+queryClient.invalidateQueries({ queryKey: questKeys.all });
+```
+
+**Règle** : toute mutation qui change le contenu d'un listing **doit** invalider la query key `xxxKeys.all` du domaine pour que la liste se rafraîchisse au retour. Sans ça, l'utilisateur voit du stale jusqu'à 30s.
+
+**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`. Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
+
+### Conversion target_value des quêtes — piège récurrent
+
+Dans `QuestForm.submit` :
+- `quest_type === "amount_spent"` (déprécié) : `parseFloat(value) * 100` → centimes
+- `quest_type === "cashback_earned"` : `parseInt(value)` → PdB direct (1 PdB = 1 centime, mais saisi en PdB)
+- Tous les autres : `parseInt(value)` → unités directes
+
+Si tu modifies cette logique, **vérifie cashback_earned** : la saisie "50" doit donner `target_value = 50`, pas 5000.
+
 ## Consignes pour les Agents IA
 
 ### Avant de modifier du code

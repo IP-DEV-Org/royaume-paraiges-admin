@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { questKeys } from "@/lib/queries/keys";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -44,6 +46,7 @@ import {
 export default function EditQuestPage() {
   const router = useRouter();
   const params = useParams();
+  const queryClient = useQueryClient();
   const id = Number(params.id);
 
   const [initial, setInitial] = useState<QuestFormInput | null>(null);
@@ -134,6 +137,7 @@ export default function EditQuestPage() {
       await setQuestPeriods(id, payload.periods);
       await setQuestEstablishments(id, payload.establishments);
 
+      queryClient.invalidateQueries({ queryKey: questKeys.all });
       toast.success("Quête modifiée avec succès");
       router.push("/quests");
     } catch (err) {
@@ -154,6 +158,7 @@ export default function EditQuestPage() {
     setDeleting(true);
     try {
       await deleteQuest(id);
+      queryClient.invalidateQueries({ queryKey: questKeys.all });
       toast.success("Quête supprimée");
       router.push("/quests");
     } catch (err) {
