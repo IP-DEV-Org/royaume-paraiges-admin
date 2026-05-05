@@ -109,6 +109,62 @@ export async function toggleQuestActive(id: number, isActive: boolean): Promise<
   if (error) throw error;
 }
 
+async function findAvailableDuplicateSlug(baseSlug: string): Promise<string> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("quests")
+    .select("slug")
+    .like("slug", `${baseSlug}_duplicate%`);
+
+  if (error) throw error;
+
+  const existing = new Set(((data || []) as { slug: string }[]).map((r) => r.slug));
+  const candidate = `${baseSlug}_duplicate`;
+  if (!existing.has(candidate)) return candidate;
+
+  let i = 2;
+  while (existing.has(`${baseSlug}_duplicate_${i}`)) i++;
+  return `${baseSlug}_duplicate_${i}`;
+}
+
+export async function duplicateQuest(id: number): Promise<Quest> {
+  const original = await getQuest(id);
+  if (!original) throw new Error("Quête introuvable");
+
+  const newSlug = await findAvailableDuplicateSlug(original.slug);
+
+  const insertPayload: QuestInsert = {
+    name: original.name,
+    description: original.description,
+    lore: original.lore,
+    slug: newSlug,
+    quest_type: original.quest_type,
+    consumption_type: original.consumption_type,
+    target_value: original.target_value,
+    period_type: original.period_type,
+    coupon_template_id: original.coupon_template_id,
+    badge_type_id: original.badge_type_id,
+    bonus_xp: original.bonus_xp,
+    bonus_cashback: original.bonus_cashback,
+    display_order: original.display_order,
+    is_active: false,
+  };
+
+  const created = await createQuest(insertPayload);
+
+  const periodIdentifiers = (original.quest_periods || []).map((p) => p.period_identifier);
+  if (periodIdentifiers.length > 0) {
+    await setQuestPeriods(created.id, periodIdentifiers);
+  }
+
+  const establishmentIds = await getQuestEstablishments(id);
+  if (establishmentIds.length > 0) {
+    await setQuestEstablishments(created.id, establishmentIds);
+  }
+
+  return created;
+}
+
 // Quest Completion Logs (for analytics)
 export async function getQuestCompletions(
   periodIdentifier?: string
