@@ -48,10 +48,12 @@ import {
   CheckCircle2,
   FileDown,
   Beer,
+  Copy,
 } from "lucide-react";
 import {
   getQuests,
   toggleQuestActive,
+  duplicateQuest,
   generateQuestsCsvTemplate,
   exportQuestsToCsv,
   parseQuestsCsv,
@@ -138,6 +140,7 @@ export default function QuestsPage() {
   const [archiveStats, setArchiveStats] = useState<Map<number, QuestProgressStats>>(new Map());
   const [loadingArchiveStats, setLoadingArchiveStats] = useState(false);
   const [conflictDetails, setConflictDetails] = useState<QuestRedundancyDetails | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<number | null>(null);
   const { toast } = useToast();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,6 +202,27 @@ export default function QuestsPage() {
           description: "Impossible de modifier la quête",
         });
       }
+    }
+  };
+
+  const handleDuplicate = async (id: number) => {
+    setDuplicatingId(id);
+    try {
+      const created = await duplicateQuest(id);
+      toast({
+        title: "Quête dupliquée",
+        description: `Nouvelle quête créée (désactivée) : ${created.slug}`,
+      });
+      router.push(`/quests/${created.id}`);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description:
+          error instanceof Error ? error.message : "Impossible de dupliquer la quête",
+      });
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -447,12 +471,28 @@ export default function QuestsPage() {
           })()}
         </TableCell>
         <TableCell onClick={(e) => e.stopPropagation()}>
-          <Switch
-            checked={quest.is_active}
-            onCheckedChange={(checked) =>
-              handleToggleActive(quest.id, checked)
-            }
-          />
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={quest.is_active}
+              onCheckedChange={(checked) =>
+                handleToggleActive(quest.id, checked)
+              }
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title="Dupliquer la quête"
+              disabled={duplicatingId === quest.id}
+              onClick={() => handleDuplicate(quest.id)}
+            >
+              {duplicatingId === quest.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </TableCell>
       </TableRow>
     );
