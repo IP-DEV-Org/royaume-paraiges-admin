@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { achievementBadgeKeys } from "@/lib/queries/keys";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +32,7 @@ export default function EditAchievementBadgePage() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id, 10);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [badge, setBadge] = useState<AchievementBadge | null>(null);
   const [loading, setLoading] = useState(true);
   const [reawarding, setReawarding] = useState(false);
@@ -86,6 +89,7 @@ export default function EditAchievementBadgePage() {
   const handleArchive = async () => {
     try {
       await archiveAchievementBadge(badge.id);
+      queryClient.invalidateQueries({ queryKey: achievementBadgeKeys.all });
       toast.success("Badge archivé");
       router.push("/rewards/achievements");
     } catch (err) {
@@ -170,6 +174,7 @@ export default function EditAchievementBadgePage() {
         onCancel={() => router.push("/rewards/achievements")}
         onSubmit={async (payload) => {
           await updateAchievementBadge(badge.id, payload);
+          queryClient.invalidateQueries({ queryKey: achievementBadgeKeys.all });
           toast.success("Badge mis à jour");
           router.push("/rewards/achievements");
         }}

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -34,7 +36,7 @@ import {
   type GainWithProfile,
 } from "@/lib/services/couponService";
 import { formatCurrency, formatPercentage, formatDate } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
+import { couponKeys } from "@/lib/queries/keys";
 import type { Coupon } from "@/types/database";
 
 type CouponWithRelations = Coupon & {
@@ -48,7 +50,6 @@ type RewardItem = {
   customer_id: string;
   created_at: string;
   profiles: { first_name: string | null; last_name: string | null; email: string | null } | null;
-  // Coupon fields
   percentage?: number | null;
   amount?: number | null;
   used?: boolean;
@@ -56,7 +57,6 @@ type RewardItem = {
   distribution_type?: string | null;
   period_identifier?: string | null;
   template_name?: string | null;
-  // Gain fields
   cashback_money?: number | null;
   source_type?: string | null;
 };
@@ -115,68 +115,69 @@ function isExpired(expiresAt: string | null | undefined) {
 }
 
 export default function RewardsPage() {
-  const [coupons, setCoupons] = useState<CouponWithRelations[]>([]);
-  const [gains, setGains] = useState<GainWithProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [rewardTypeFilter, setRewardTypeFilter] = useState<RewardTypeFilter>("all");
+  const [rewardTypeFilter, setRewardTypeFilter] =
+    useState<RewardTypeFilter>("all");
   const [couponFilters, setCouponFilters] = useState<CouponFilters>({});
   const [page, setPage] = useState(0);
-  const { toast } = useToast();
   const router = useRouter();
 
   const limit = 20;
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const promises: Promise<void>[] = [];
+  const couponsQuery = useQuery({
+    queryKey: couponKeys.list({
+      kind: "coupons",
+      ...(couponFilters as Record<string, unknown>),
+    }),
+    queryFn: async () => {
+      const { data } = await getCoupons(couponFilters, 100, 0);
+      return data as CouponWithRelations[];
+    },
+    enabled: rewardTypeFilter !== "gains",
+  });
 
-      if (rewardTypeFilter !== "gains") {
-        promises.push(
-          getCoupons(couponFilters, 100, 0).then(({ data }) => {
-            setCoupons(data as CouponWithRelations[]);
-          })
-        );
-      } else {
-        setCoupons([]);
-      }
+  const gainsQuery = useQuery({
+    queryKey: couponKeys.list({ kind: "gains" }),
+    queryFn: async () => {
+      const { data } = await getBonusCashbackGains(100, 0);
+      return data;
+    },
+    enabled: rewardTypeFilter !== "coupons",
+  });
 
-      if (rewardTypeFilter !== "coupons") {
-        promises.push(
-          getBonusCashbackGains(100, 0).then(({ data }) => {
-            setGains(data);
-          })
-        );
-      } else {
-        setGains([]);
-      }
-
-      await Promise.all(promises);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+  const error = couponsQuery.error || gainsQuery.error;
+  useEffect(() => {
+    if (error) {
+      console.error(error);
+      toast.error("Erreur", {
         description: "Impossible de charger les récompenses",
       });
-    } finally {
-      setLoading(false);
     }
-  }, [rewardTypeFilter, couponFilters, toast]);
+  }, [error]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Reset page when filters change
-  useEffect(() => {
+  const updateRewardType = (value: RewardTypeFilter) => {
+    setRewardTypeFilter(value);
     setPage(0);
-  }, [rewardTypeFilter, couponFilters]);
+  };
 
-  // Merge and sort
+  const updateCouponFilters = (next: CouponFilters) => {
+    setCouponFilters(next);
+    setPage(0);
+  };
+
+  const isLoading =
+    (rewardTypeFilter !== "gains" && couponsQuery.isLoading) ||
+    (rewardTypeFilter !== "coupons" && gainsQuery.isLoading);
+
+  const coupons = rewardTypeFilter !== "gains" ? couponsQuery.data ?? [] : [];
+  const gains = rewardTypeFilter !== "coupons" ? gainsQuery.data ?? [] : [];
+
   const allItems: RewardItem[] = [
     ...coupons.map(couponToRewardItem),
     ...gains.map(gainToRewardItem),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  ].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 
   const totalItems = allItems.length;
   const totalPages = Math.ceil(totalItems / limit);
@@ -186,7 +187,7 @@ export default function RewardsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Recompenses</h1>
+          <h1 className="text-3xl font-bold">Récompenses</h1>
           <p className="text-muted-foreground">
             Liste de toutes les récompenses distribuées
           </p>
@@ -201,9 +202,9 @@ export default function RewardsPage() {
           <div className="flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:gap-4 sm:justify-between">
             <Select
               value={rewardTypeFilter}
-              onValueChange={(value) => {
-                setRewardTypeFilter(value as RewardTypeFilter);
-              }}
+              onValueChange={(value) =>
+                updateRewardType(value as RewardTypeFilter)
+              }
             >
               <SelectTrigger className="w-[140px] shrink-0 sm:w-[200px]">
                 <SelectValue placeholder="Type de récompense" />
@@ -219,40 +220,46 @@ export default function RewardsPage() {
               <div className="flex items-center gap-2 sm:gap-3">
                 <Select
                   value={couponFilters.isUsed?.toString() || "all"}
-                  onValueChange={(value) => {
-                    setCouponFilters({
+                  onValueChange={(value) =>
+                    updateCouponFilters({
                       ...couponFilters,
                       isUsed: value === "all" ? undefined : value === "true",
-                    });
-                  }}
+                    })
+                  }
                 >
                   <SelectTrigger className="w-[120px] shrink-0 sm:w-[180px]">
                     <SelectValue placeholder="Statut coupon" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tous les statuts</SelectItem>
-                    <SelectItem value="false">Non utilise</SelectItem>
+                    <SelectItem value="false">Non utilisé</SelectItem>
                     <SelectItem value="true">Utilisé</SelectItem>
                   </SelectContent>
                 </Select>
 
                 <Select
                   value={couponFilters.distributionType || "all"}
-                  onValueChange={(value) => {
-                    setCouponFilters({
+                  onValueChange={(value) =>
+                    updateCouponFilters({
                       ...couponFilters,
                       distributionType: value === "all" ? undefined : value,
-                    });
-                  }}
+                    })
+                  }
                 >
                   <SelectTrigger className="w-[140px] shrink-0 sm:w-[200px]">
                     <SelectValue placeholder="Source" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Toutes les sources</SelectItem>
-                    <SelectItem value="leaderboard_weekly">Leaderboard Hebdo</SelectItem>
-                    <SelectItem value="leaderboard_monthly">Leaderboard Mensuel</SelectItem>
-                    <SelectItem value="leaderboard_yearly">Leaderboard Annuel</SelectItem>
+                    <SelectItem value="leaderboard_weekly">
+                      Leaderboard Hebdo
+                    </SelectItem>
+                    <SelectItem value="leaderboard_monthly">
+                      Leaderboard Mensuel
+                    </SelectItem>
+                    <SelectItem value="leaderboard_yearly">
+                      Leaderboard Annuel
+                    </SelectItem>
                     <SelectItem value="manual">Manuel</SelectItem>
                     <SelectItem value="trigger_legacy">Legacy</SelectItem>
                   </SelectContent>
@@ -260,12 +267,13 @@ export default function RewardsPage() {
 
                 <Select
                   value={couponFilters.isExpired?.toString() || "all"}
-                  onValueChange={(value) => {
-                    setCouponFilters({
+                  onValueChange={(value) =>
+                    updateCouponFilters({
                       ...couponFilters,
-                      isExpired: value === "all" ? undefined : value === "true",
-                    });
-                  }}
+                      isExpired:
+                        value === "all" ? undefined : value === "true",
+                    })
+                  }
                 >
                   <SelectTrigger className="w-[120px] shrink-0 sm:w-[180px]">
                     <SelectValue placeholder="Expiration" />
@@ -273,7 +281,7 @@ export default function RewardsPage() {
                   <SelectContent>
                     <SelectItem value="all">Tous</SelectItem>
                     <SelectItem value="false">Valide</SelectItem>
-                    <SelectItem value="true">Expire</SelectItem>
+                    <SelectItem value="true">Expiré</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -290,7 +298,7 @@ export default function RewardsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {isLoading ? (
             <div className="flex h-32 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
@@ -316,16 +324,21 @@ export default function RewardsPage() {
                     <TableRow
                       key={`${item.kind}-${item.id}`}
                       className="cursor-pointer"
-                      onClick={() => router.push(`/users/${item.customer_id}`)}
+                      onClick={() =>
+                        router.push(`/users/${item.customer_id}`)
+                      }
                     >
                       <TableCell className="font-mono text-sm">
-                        {item.kind === "coupon" ? `#C${item.id}` : `#G${item.id}`}
+                        {item.kind === "coupon"
+                          ? `#C${item.id}`
+                          : `#G${item.id}`}
                       </TableCell>
                       <TableCell>
                         <div>
                           <span className="font-medium">
                             {item.profiles
-                              ? `${item.profiles.first_name || ""} ${item.profiles.last_name || ""}`.trim() || item.profiles.email
+                              ? `${item.profiles.first_name || ""} ${item.profiles.last_name || ""}`.trim() ||
+                                item.profiles.email
                               : "Inconnu"}
                           </span>
                           <p className="text-sm text-muted-foreground">
@@ -360,13 +373,17 @@ export default function RewardsPage() {
                       </TableCell>
                       <TableCell>
                         {item.kind === "gain" ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Crédité</Badge>
+                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                            Crédité
+                          </Badge>
                         ) : item.amount && item.used ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Crédité</Badge>
+                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                            Crédité
+                          </Badge>
                         ) : item.used ? (
                           <Badge variant="secondary">Utilisé</Badge>
                         ) : isExpired(item.expires_at) ? (
-                          <Badge variant="destructive">Expire</Badge>
+                          <Badge variant="destructive">Expiré</Badge>
                         ) : (
                           <Badge variant="success">Actif</Badge>
                         )}

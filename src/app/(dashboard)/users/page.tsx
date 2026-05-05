@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -30,67 +32,54 @@ import { Loader2, Users, UserPlus, Shield, Briefcase, Building2 } from "lucide-r
 import { useRouter } from "next/navigation";
 import { getUsers, getUserStats, type UserFilters } from "@/lib/services/userService";
 import { formatDate } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
-import type { Profile, UserRole } from "@/types/database";
+import { userKeys } from "@/lib/queries/keys";
+import type { UserRole } from "@/types/database";
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<UserFilters>({});
   const [searchInput, setSearchInput] = useState("");
-  const [stats, setStats] = useState<{
-    totalUsers: number;
-    totalClients: number;
-    totalEmployees: number;
-    totalEstablishments: number;
-    totalAdmins: number;
-    newUsersThisMonth: number;
-  } | null>(null);
-  const { toast } = useToast();
   const router = useRouter();
 
   const limit = 20;
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [usersResult, statsResult] = await Promise.all([
-        getUsers(filters, limit, page * limit),
-        getUserStats(),
-      ]);
-      setUsers(usersResult.data);
-      setTotal(usersResult.count);
-      setStats(statsResult);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+  const usersQuery = useQuery({
+    queryKey: userKeys.list({ ...filters, page }),
+    queryFn: () => getUsers(filters, limit, page * limit),
+  });
+
+  const statsQuery = useQuery({
+    queryKey: [...userKeys.all, "stats"] as const,
+    queryFn: getUserStats,
+  });
+
+  const error = usersQuery.error || statsQuery.error;
+  useEffect(() => {
+    if (error) {
+      console.error(error);
+      toast.error("Erreur", {
         description: "Impossible de charger les utilisateurs",
       });
-    } finally {
-      setLoading(false);
     }
-  }, [filters, page, toast]);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  }, [error]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (searchInput.length >= 3) {
         setPage(0);
-        setFilters(prev => ({ ...prev, search: searchInput }));
+        setFilters((prev) => ({ ...prev, search: searchInput }));
       } else if (searchInput.length === 0) {
         setPage(0);
-        setFilters(prev => ({ ...prev, search: undefined }));
+        setFilters((prev) => ({ ...prev, search: undefined }));
       }
     }, 300);
     return () => clearTimeout(timeout);
   }, [searchInput]);
 
+  const users = usersQuery.data?.data ?? [];
+  const total = usersQuery.data?.count ?? 0;
+  const stats = statsQuery.data ?? null;
+  const loading = usersQuery.isLoading;
   const totalPages = Math.ceil(total / limit);
 
   return (

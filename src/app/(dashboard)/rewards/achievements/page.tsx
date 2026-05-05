@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -21,11 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Loader2, Medal } from "lucide-react";
-import {
-  listAchievementBadges,
-  type AchievementBadge,
-} from "@/lib/services/achievementBadgeService";
-import { useToast } from "@/components/ui/use-toast";
+import { listAchievementBadges } from "@/lib/services/achievementBadgeService";
+import { achievementBadgeKeys } from "@/lib/queries/keys";
 
 const RARITY_COLORS: Record<string, string> = {
   common: "bg-slate-100 text-slate-800",
@@ -45,25 +44,26 @@ const CRITERION_LABELS: Record<string, string> = {
 
 export default function AchievementBadgesPage() {
   const router = useRouter();
-  const [badges, setBadges] = useState<AchievementBadge[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+
+  const {
+    data: badges = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: achievementBadgeKeys.lists(),
+    queryFn: listAchievementBadges,
+  });
 
   useEffect(() => {
-    listAchievementBadges()
-      .then(setBadges)
-      .catch((err) => {
-        console.error(err);
-        toast({
-          variant: "destructive",
-          title: "Erreur",
-          description: "Impossible de charger les badges succès",
-        });
-      })
-      .finally(() => setLoading(false));
-  }, [toast]);
+    if (error) {
+      console.error(error);
+      toast.error("Erreur", {
+        description: "Impossible de charger les badges succès",
+      });
+    }
+  }, [error]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

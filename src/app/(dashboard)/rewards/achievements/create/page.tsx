@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -9,10 +10,12 @@ import {
   createAchievementBadge,
   reawardAchievementBadge,
 } from "@/lib/services/achievementBadgeService";
+import { achievementBadgeKeys } from "@/lib/queries/keys";
 import { AchievementBadgeForm } from "../_form/AchievementBadgeForm";
 
 export default function CreateAchievementBadgePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -47,6 +50,7 @@ export default function CreateAchievementBadgePage() {
               description: "Tu peux relancer l'attribution depuis la page d'édition.",
             });
           }
+          queryClient.invalidateQueries({ queryKey: achievementBadgeKeys.all });
           router.push("/rewards/achievements");
         }}
       />

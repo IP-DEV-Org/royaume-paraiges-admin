@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { toast } from "sonner";
+import { couponKeys } from "@/lib/queries/keys";
 import {
   Card,
   CardContent,
@@ -87,6 +89,7 @@ type FormInput = z.infer<typeof formSchema>;
 export default function CreateCouponPage() {
   const router = useRouter();
   const supabase = createClient();
+  const queryClient = useQueryClient();
 
   const [templates, setTemplates] = useState<CouponTemplate[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -211,6 +214,7 @@ export default function CreateCouponPage() {
         }
       }
 
+      queryClient.invalidateQueries({ queryKey: couponKeys.all });
       toast.success(successMessage);
       router.push("/coupons");
     } catch (err) {
