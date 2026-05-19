@@ -11,7 +11,6 @@ export const manualCouponSchema = z
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD attendu")
       .optional(),
     notes: z.string().max(500).optional(),
-    adminId: z.uuid().optional(),
   })
   .refine(
     (data) => {

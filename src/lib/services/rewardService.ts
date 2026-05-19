@@ -177,24 +177,21 @@ export async function getDistributionPreview(
 
 export async function distributeRewards(
   periodType: PeriodType,
-  periodIdentifier?: string,
-  adminId?: string
+  periodIdentifier?: string
 ) {
   const input = distributeRewardsSchema.parse({
     periodType,
     periodIdentifier,
     force: false,
     previewOnly: false,
-    adminId,
   });
   const supabase = createClient();
-   
+
   const { data, error } = await (supabase.rpc as any)("distribute_period_rewards_v2", {
     p_period_type: input.periodType,
     p_period_identifier: input.periodIdentifier,
     p_force: input.force,
     p_preview_only: input.previewOnly,
-    p_admin_id: input.adminId,
   });
 
   if (error) throw error;
@@ -203,24 +200,21 @@ export async function distributeRewards(
 
 export async function forceDistributeRewards(
   periodType: PeriodType,
-  periodIdentifier?: string,
-  adminId?: string
+  periodIdentifier?: string
 ) {
   const input = distributeRewardsSchema.parse({
     periodType,
     periodIdentifier,
     force: true,
     previewOnly: false,
-    adminId,
   });
   const supabase = createClient();
-   
+
   const { data, error } = await (supabase.rpc as any)("distribute_period_rewards_v2", {
     p_period_type: input.periodType,
     p_period_identifier: input.periodIdentifier,
     p_force: input.force,
     p_preview_only: input.previewOnly,
-    p_admin_id: input.adminId,
   });
 
   if (error) throw error;
