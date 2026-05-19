@@ -20,7 +20,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createManualCoupon } from "@/lib/services/couponService";
-import { createClient } from "@/lib/supabase/client";
 import { CustomerSearchCard } from "@/components/customer-search-card";
 import type { Profile } from "@/types/database";
 
@@ -44,7 +43,6 @@ type FormInput = z.infer<typeof formSchema>;
 
 export default function CreateCouponPage() {
   const router = useRouter();
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   const form = useForm<FormInput>({
@@ -85,16 +83,11 @@ export default function CreateCouponPage() {
 
   const submit = handleSubmit(async (values) => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
       await createManualCoupon({
         customerId: values.customerId,
         percentage: parseInt(values.percentage, 10),
         expiresAt: values.expiresAt || undefined,
         notes: values.notes || undefined,
-        adminId: user?.id,
       });
 
       queryClient.invalidateQueries({ queryKey: couponKeys.all });

@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -273,6 +273,13 @@ export type Database = {
             foreignKeyName: "beers_establishments_establishment_id_fkey"
             columns: ["establishment_id"]
             isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "beers_establishments_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
             referencedRelation: "establishments"
             referencedColumns: ["id"]
           },
@@ -301,6 +308,269 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      cashpad_employee_mappings: {
+        Row: {
+          cashpad_user_id: string
+          cashpad_user_name: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          installation_id: string
+          profile_id: string
+        }
+        Insert: {
+          cashpad_user_id: string
+          cashpad_user_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          installation_id: string
+          profile_id: string
+        }
+        Update: {
+          cashpad_user_id?: string
+          cashpad_user_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          installation_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashpad_employee_mappings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashpad_employee_mappings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashpad_employee_mappings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "cashpad_employee_mappings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashpad_employee_mappings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashpad_employee_mappings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      cashpad_matching_params: {
+        Row: {
+          clock_offset_seconds: number
+          computed_at: string
+          establishment_id: number
+          sample_size: number
+          window_seconds: number
+        }
+        Insert: {
+          clock_offset_seconds?: number
+          computed_at?: string
+          establishment_id: number
+          sample_size?: number
+          window_seconds?: number
+        }
+        Update: {
+          clock_offset_seconds?: number
+          computed_at?: string
+          establishment_id?: number
+          sample_size?: number
+          window_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashpad_matching_params_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: true
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "cashpad_matching_params_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: true
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cashpad_receipts_snapshot: {
+        Row: {
+          amount_cents: number
+          cancelled: boolean
+          cashpad_receipt_id: string
+          cashpad_sequential_id: number | null
+          cashpad_user_id: string | null
+          cashpad_user_name: string | null
+          closed_at: string
+          establishment_id: number | null
+          fetched_at: string
+          installation_id: string
+          products: Json | null
+          raw_payload: Json
+        }
+        Insert: {
+          amount_cents: number
+          cancelled?: boolean
+          cashpad_receipt_id: string
+          cashpad_sequential_id?: number | null
+          cashpad_user_id?: string | null
+          cashpad_user_name?: string | null
+          closed_at: string
+          establishment_id?: number | null
+          fetched_at?: string
+          installation_id: string
+          products?: Json | null
+          raw_payload: Json
+        }
+        Update: {
+          amount_cents?: number
+          cancelled?: boolean
+          cashpad_receipt_id?: string
+          cashpad_sequential_id?: number | null
+          cashpad_user_id?: string | null
+          cashpad_user_name?: string | null
+          closed_at?: string
+          establishment_id?: number | null
+          fetched_at?: string
+          installation_id?: string
+          products?: Json | null
+          raw_payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashpad_receipts_snapshot_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "cashpad_receipts_snapshot_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cashpad_reconciliations: {
+        Row: {
+          cancelled_match_id: string | null
+          candidates: Json | null
+          cashpad_receipt_id: string | null
+          confidence_score: number | null
+          id: string
+          manual_link_delta_seconds: number | null
+          manually_linked_at: string | null
+          manually_linked_by: string | null
+          notes: string | null
+          receipt_id: number
+          reconciled_at: string
+          status: string
+          time_delta_seconds: number | null
+        }
+        Insert: {
+          cancelled_match_id?: string | null
+          candidates?: Json | null
+          cashpad_receipt_id?: string | null
+          confidence_score?: number | null
+          id?: string
+          manual_link_delta_seconds?: number | null
+          manually_linked_at?: string | null
+          manually_linked_by?: string | null
+          notes?: string | null
+          receipt_id: number
+          reconciled_at?: string
+          status: string
+          time_delta_seconds?: number | null
+        }
+        Update: {
+          cancelled_match_id?: string | null
+          candidates?: Json | null
+          cashpad_receipt_id?: string | null
+          confidence_score?: number | null
+          id?: string
+          manual_link_delta_seconds?: number | null
+          manually_linked_at?: string | null
+          manually_linked_by?: string | null
+          notes?: string | null
+          receipt_id?: number
+          reconciled_at?: string
+          status?: string
+          time_delta_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashpad_reconciliations_cancelled_match_id_fkey"
+            columns: ["cancelled_match_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_receipts_snapshot"
+            referencedColumns: ["cashpad_receipt_id"]
+          },
+          {
+            foreignKeyName: "cashpad_reconciliations_cashpad_receipt_id_fkey"
+            columns: ["cashpad_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_receipts_snapshot"
+            referencedColumns: ["cashpad_receipt_id"]
+          },
+          {
+            foreignKeyName: "cashpad_reconciliations_manually_linked_by_fkey"
+            columns: ["manually_linked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashpad_reconciliations_manually_linked_by_fkey"
+            columns: ["manually_linked_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashpad_reconciliations_manually_linked_by_fkey"
+            columns: ["manually_linked_by"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "cashpad_reconciliations_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: true
+            referencedRelation: "receipts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cashpad_webhook_queue: {
         Row: {
@@ -403,6 +673,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_stats"
             referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "comments_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
           },
           {
             foreignKeyName: "comments_establishment_id_fkey"
@@ -644,6 +921,13 @@ export type Database = {
             foreignKeyName: "coupon_templates_establishment_id_fkey"
             columns: ["establishment_id"]
             isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "coupon_templates_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
             referencedRelation: "establishments"
             referencedColumns: ["id"]
           },
@@ -717,6 +1001,30 @@ export type Database = {
           },
         ]
       }
+      establishment_groups: {
+        Row: {
+          cashpad_installation_id: string | null
+          created_at: string
+          id: number
+          name: string
+          slug: string
+        }
+        Insert: {
+          cashpad_installation_id?: string | null
+          created_at?: string
+          id?: number
+          name: string
+          slug: string
+        }
+        Update: {
+          cashpad_installation_id?: string | null
+          created_at?: string
+          id?: number
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       establishments: {
         Row: {
           anniversary: string | null
@@ -726,6 +1034,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           featured_image: string | null
+          group_id: number | null
           id: number
           line_address_1: string | null
           line_address_2: string | null
@@ -743,6 +1052,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           featured_image?: string | null
+          group_id?: number | null
           id: number
           line_address_1?: string | null
           line_address_2?: string | null
@@ -760,6 +1070,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           featured_image?: string | null
+          group_id?: number | null
           id?: number
           line_address_1?: string | null
           line_address_2?: string | null
@@ -769,7 +1080,15 @@ export type Database = {
           updated_at?: string | null
           zipcode?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "establishments_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "establishment_groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gains: {
         Row: {
@@ -836,6 +1155,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_stats"
             referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "gains_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
           },
           {
             foreignKeyName: "gains_establishment_id_fkey"
@@ -1197,6 +1523,13 @@ export type Database = {
           news_id?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "news_establishments_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
           {
             foreignKeyName: "news_establishments_establishment_id_fkey"
             columns: ["establishment_id"]
@@ -1743,6 +2076,13 @@ export type Database = {
             foreignKeyName: "quests_establishments_establishment_id_fkey"
             columns: ["establishment_id"]
             isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "quests_establishments_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
             referencedRelation: "establishments"
             referencedColumns: ["id"]
           },
@@ -1889,6 +2229,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_stats"
             referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "receipts_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
           },
           {
             foreignKeyName: "receipts_establishment_id_fkey"
@@ -2095,6 +2442,13 @@ export type Database = {
             foreignKeyName: "spendings_establishment_id_fkey"
             columns: ["establishment_id"]
             isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "spendings_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
             referencedRelation: "establishments"
             referencedColumns: ["id"]
           },
@@ -2210,6 +2564,78 @@ export type Database = {
           sample_size: number | null
         }
         Relationships: []
+      }
+      cashpad_clock_drift: {
+        Row: {
+          drift_s: number | null
+          establishment_id: number | null
+          median_30d_s: number | null
+          median_7d_s: number | null
+          n_30d: number | null
+          n_7d: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipts_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "receipts_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cashpad_health_stats_30d: {
+        Row: {
+          avg_confidence: number | null
+          cashpad_installation_id: string | null
+          current_offset_s: number | null
+          current_window_s: number | null
+          establishment_id: number | null
+          establishment_title: string | null
+          match_rate_pct: number | null
+          n_ambiguous: number | null
+          n_excluded: number | null
+          n_matched: number | null
+          n_orphan: number | null
+          n_orphan_cancelled_match: number | null
+          n_total: number | null
+          params_computed_at: string | null
+          params_sample_size: number | null
+        }
+        Relationships: []
+      }
+      cashpad_window_feedback: {
+        Row: {
+          current_offset_s: number | null
+          current_window_s: number | null
+          establishment_id: number | null
+          manual_links_out_of_window: number | null
+          manual_links_total: number | null
+          suggested_window_p95: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipts_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "receipts_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       monthly_xp_leaderboard: {
         Row: {
@@ -2361,6 +2787,15 @@ export type Database = {
       }
     }
     Functions: {
+      assert_admin: { Args: never; Returns: undefined }
+      assert_admin_or_establishment_for: {
+        Args: { p_establishment_id: number }
+        Returns: undefined
+      }
+      assert_self_or_staff: {
+        Args: { p_customer_id: string }
+        Returns: undefined
+      }
       award_achievements_for_all_cron: { Args: never; Returns: Json }
       award_achievements_for_all_for_badge: {
         Args: { p_badge_id: number }
@@ -2438,6 +2873,15 @@ export type Database = {
         Args: { username_to_check: string }
         Returns: boolean
       }
+      compute_cashpad_matching_params: {
+        Args: never
+        Returns: {
+          out_clock_offset_seconds: number
+          out_establishment_id: number
+          out_sample_size: number
+          out_window_seconds: number
+        }[]
+      }
       compute_level_from_xp: { Args: { p_xp: number }; Returns: number }
       create_frequency_coupon: {
         Args: { p_customer_id: string }
@@ -2453,7 +2897,6 @@ export type Database = {
       }
       create_manual_coupon: {
         Args: {
-          p_admin_id?: string
           p_amount?: number
           p_customer_id: string
           p_expires_at?: string
@@ -2496,7 +2939,6 @@ export type Database = {
       }
       distribute_period_rewards_v2: {
         Args: {
-          p_admin_id?: string
           p_force?: boolean
           p_period_identifier?: string
           p_period_type: string
@@ -2505,7 +2947,7 @@ export type Database = {
         Returns: Json
       }
       distribute_quest_reward: {
-        Args: { p_admin_id?: string; p_quest_progress_id: number }
+        Args: { p_quest_progress_id: number }
         Returns: Json
       }
       expire_quest_progress: { Args: never; Returns: Json }
@@ -2604,6 +3046,22 @@ export type Database = {
       get_period_preview: {
         Args: { p_period_identifier?: string; p_period_type: string }
         Returns: Json
+      }
+      get_period_preview_public: {
+        Args: {
+          p_period_identifier: string
+          p_period_type: string
+          p_top_n?: number
+        }
+        Returns: {
+          avatar_url: string
+          current_xp: number
+          is_me: boolean
+          projected_reward_amount: number
+          projected_reward_type: string
+          rank: number
+          username: string
+        }[]
       }
       get_previous_period_identifier: {
         Args: { p_period_type: string }

@@ -198,12 +198,11 @@ export async function getQuestCompletionsByQuest(questId: number): Promise<Quest
 }
 
 // RPC functions
-export async function distributeQuestReward(questProgressId: number, adminId?: string) {
+export async function distributeQuestReward(questProgressId: number) {
   const supabase = createClient();
-   
+
   const { data, error } = await (supabase.rpc as any)("distribute_quest_reward", {
     p_quest_progress_id: questProgressId,
-    p_admin_id: adminId,
   });
 
   if (error) throw error;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import {
   Card,
   CardContent,
@@ -44,30 +45,32 @@ import {
 } from "@/lib/services/rewardService";
 import { getPeriodIdentifier, formatCurrency, formatPercentage } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
-import { createClient } from "@/lib/supabase/client";
 import type { PeriodType } from "@/types/database";
 
 interface PreviewItem {
   rank: number;
   customer_id: string;
-  customer_name: string;
-  customer_email: string;
   xp: number;
   tier_name: string;
-  coupon_name: string | null;
-  coupon_value: string | null;
   coupon_amount: number | null;
   coupon_percentage: number | null;
-  badge_name: string | null;
+  badge_type_id: number | null;
+}
+
+interface CustomerInfo {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
 }
 
 export default function DistributePage() {
   const { toast } = useToast();
-  const supabase = createClient();
 
   const [periodType, setPeriodType] = useState<PeriodType>("weekly");
   const [periodIdentifier, setPeriodIdentifier] = useState("");
   const [preview, setPreview] = useState<PreviewItem[]>([]);
+  const [customers, setCustomers] = useState<Record<string, CustomerInfo>>({});
   const [loading, setLoading] = useState(false);
   const [distributing, setDistributing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -109,11 +112,42 @@ export default function DistributePage() {
 
     setLoading(true);
     setPreview([]);
+    setCustomers({});
     setDistributed(false);
 
     try {
-      const data = await getDistributionPreview(periodType, periodIdentifier);
-      setPreview((data as { recipients: PreviewItem[] })?.recipients || []);
+      const result = (await getDistributionPreview(periodType, periodIdentifier)) as {
+        success?: boolean;
+        error?: string;
+        data?: PreviewItem[];
+      };
+
+      if (result?.success === false) {
+        toast({
+          variant: "destructive",
+          title: "Erreur",
+          description: result.error || "La prévisualisation a échoué",
+        });
+        return;
+      }
+
+      const items = result?.data || [];
+      setPreview(items);
+
+      if (items.length > 0) {
+        const supabase = createClient();
+        const ids = items.map((item) => item.customer_id);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name, email")
+          .in("id", ids);
+
+        const map: Record<string, CustomerInfo> = {};
+        (profiles || []).forEach((p) => {
+          map[p.id] = p as CustomerInfo;
+        });
+        setCustomers(map);
+      }
     } catch (error) {
       toast({
         variant: "destructive",
@@ -129,14 +163,9 @@ export default function DistributePage() {
     setDistributing(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
       const result = await distributeRewards(
         periodType,
-        periodIdentifier,
-        user?.id
+        periodIdentifier
       );
 
       toast({
@@ -281,7 +310,13 @@ export default function DistributePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.map((item) => (
+                {preview.map((item) => {
+                  const customer = customers[item.customer_id];
+                  const customerName =
+                    [customer?.first_name, customer?.last_name].filter(Boolean).join(" ") ||
+                    customer?.email ||
+                    item.customer_id.slice(0, 8) + "…";
+                  return (
                   <TableRow key={item.customer_id}>
                     <TableCell>
                       <Badge
@@ -292,9 +327,9 @@ export default function DistributePage() {
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{item.customer_name}</p>
+                        <p className="font-medium">{customerName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {item.customer_email}
+                          {customer?.email || ""}
                         </p>
                       </div>
                     </TableCell>
@@ -314,7 +349,8 @@ export default function DistributePage() {
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>

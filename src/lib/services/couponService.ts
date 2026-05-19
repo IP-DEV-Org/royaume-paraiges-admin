@@ -123,7 +123,6 @@ export async function createManualCoupon(params: {
   percentage?: number;
   expiresAt?: string;
   notes?: string;
-  adminId?: string;
 }) {
   const input = manualCouponSchema.parse(params);
   const supabase = createClient();
@@ -133,7 +132,7 @@ export async function createManualCoupon(params: {
     ? new Date(input.expiresAt + "T23:59:59.999Z").toISOString()
     : null;
 
-   
+
   const { data, error } = await (supabase.rpc as any)("create_manual_coupon", {
     p_customer_id: input.customerId,
     p_template_id: input.templateId ?? null,
@@ -141,7 +140,6 @@ export async function createManualCoupon(params: {
     p_percentage: input.percentage ?? null,
     p_expires_at: expiresAtTimestamp,
     p_notes: input.notes ?? null,
-    p_admin_id: input.adminId ?? null,
   });
 
   if (error) throw error;
