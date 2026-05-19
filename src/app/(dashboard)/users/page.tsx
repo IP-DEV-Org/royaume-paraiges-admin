@@ -14,13 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -31,7 +24,7 @@ import {
 import { Loader2, Users, UserPlus, Shield, Briefcase, Building2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getUsers, getUserStats, type UserFilters } from "@/lib/services/userService";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { userKeys } from "@/lib/queries/keys";
 import type { UserRole } from "@/types/database";
 
@@ -82,8 +75,73 @@ export default function UsersPage() {
   const loading = usersQuery.isLoading;
   const totalPages = Math.ceil(total / limit);
 
+  const activeRole = filters.role;
+  const toggleRole = (role: UserRole) => {
+    setPage(0);
+    setFilters((prev) => ({
+      ...prev,
+      role: prev.role === role ? undefined : role,
+    }));
+  };
+
+  const clientTiles: Array<{
+    label: string;
+    value: number;
+    icon: typeof Users;
+    role?: UserRole;
+  }> = stats
+    ? [
+        { label: "Clients", value: stats.totalClients, icon: Users, role: "client" },
+        { label: "Nouveaux ce mois", value: stats.newUsersThisMonth, icon: UserPlus },
+      ]
+    : [];
+
+  const internalTiles: Array<{
+    label: string;
+    value: number;
+    icon: typeof Users;
+    role: UserRole;
+  }> = stats
+    ? [
+        { label: "Admins", value: stats.totalAdmins, icon: Shield, role: "admin" },
+        { label: "Employés", value: stats.totalEmployees, icon: Briefcase, role: "employee" },
+        { label: "Établissements", value: stats.totalEstablishments, icon: Building2, role: "establishment" },
+      ]
+    : [];
+
+  const renderTile = (tile: {
+    label: string;
+    value: number;
+    icon: typeof Users;
+    role?: UserRole;
+  }) => {
+    const isClickable = !!tile.role;
+    const isActive = isClickable && tile.role === activeRole;
+    const Icon = tile.icon;
+    return (
+      <Card
+        key={tile.label}
+        onClick={isClickable ? () => toggleRole(tile.role!) : undefined}
+        className={cn(
+          isClickable && "cursor-pointer transition-colors hover:bg-accent",
+          isActive && "border-primary bg-primary/5 hover:bg-primary/10"
+        )}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
+          <CardTitle className="text-xs font-medium text-muted-foreground">
+            {tile.label}
+          </CardTitle>
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="p-3 pt-0">
+          <div className="text-xl font-bold">{tile.value}</div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-6">
       <div>
         <h1 className="text-3xl font-bold">Utilisateurs</h1>
         <p className="text-muted-foreground">
@@ -91,204 +149,137 @@ export default function UsersPage() {
         </p>
       </div>
 
-      {stats && (
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total
-              </CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalUsers}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Clients</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalClients}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Employés</CardTitle>
-              <Briefcase className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalEmployees}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Établissements</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalEstablishments}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Admins</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalAdmins}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Nouveaux
-              </CardTitle>
-              <UserPlus className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.newUsersThisMonth}</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 sm:gap-4 sm:justify-between">
-            <div className="flex min-w-0 flex-1 gap-2 sm:flex-none">
-              <Input
-                placeholder="Rechercher..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="min-w-0 flex-1 sm:w-[300px] sm:flex-none"
-              />
-            </div>
-
-            <Select
-              value={filters.role || "all"}
-              onValueChange={(value) => {
-                setPage(0);
-                setFilters({
-                  ...filters,
-                  role: value === "all" ? undefined : (value as UserRole),
-                });
-              }}
-            >
-              <SelectTrigger className="w-[130px] shrink-0 sm:w-[180px]">
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les rôles</SelectItem>
-                <SelectItem value="client">Client</SelectItem>
-                <SelectItem value="employee">Employé</SelectItem>
-                <SelectItem value="establishment">Établissement</SelectItem>
-                <SelectItem value="admin">Administrateur</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Liste des utilisateurs</CardTitle>
-          <CardDescription>
-            {total} utilisateur{total > 1 ? "s" : ""} au total
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : users.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Aucun utilisateur trouve
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Inscrit le</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow
-                      key={user.id}
-                      className="cursor-pointer"
-                      onClick={() => router.push(`/users/${user.id}`)}
-                    >
-                      <TableCell>
-                        <div className="font-medium">
-                          {user.first_name || user.last_name
-                            ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
-                            : "Sans nom"}
-                        </div>
-                        {user.username && (
-                          <div className="text-xs text-muted-foreground">
-                            @{user.username}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{user.email || "-"}</TableCell>
-                      <TableCell>
-                        {user.role === "admin" ? (
-                          <Badge variant="default">Admin</Badge>
-                        ) : user.role === "employee" ? (
-                          <Badge variant="outline">Employé</Badge>
-                        ) : user.role === "establishment" ? (
-                          <Badge variant="secondary">Établissement</Badge>
-                        ) : (
-                          <Badge variant="secondary">Client</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(user.created_at)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Page {page + 1} sur {totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page === 0}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Précédent
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= totalPages - 1}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Suivant
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
+      <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
+        <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">
+          {stats && (
+            <section className="space-y-2">
+              <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-foreground">
+                Clients
+              </h2>
+              <div className="space-y-2">{clientTiles.map(renderTile)}</div>
+            </section>
           )}
-        </CardContent>
-      </Card>
+
+          {stats && (
+            <section className="space-y-2">
+              <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-foreground">
+                Comptes internes
+              </h2>
+              <div className="space-y-2">{internalTiles.map(renderTile)}</div>
+            </section>
+          )}
+
+          <section className="space-y-2">
+            <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-foreground">
+              Recherche
+            </h2>
+            <Input
+              placeholder="Nom, email…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full"
+            />
+          </section>
+        </aside>
+
+        <Card className="flex min-h-0 flex-1 flex-col md:h-full md:overflow-hidden">
+          <CardHeader>
+            <CardTitle>Liste des utilisateurs</CardTitle>
+            <CardDescription>
+              {total} utilisateur{total > 1 ? "s" : ""} au total
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col md:overflow-hidden">
+            {loading ? (
+              <div className="flex h-32 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : users.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                Aucun utilisateur trouve
+              </div>
+            ) : (
+              <>
+                <div className="min-h-0 flex-1 md:overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Utilisateur</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Inscrit le</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((user) => (
+                        <TableRow
+                          key={user.id}
+                          className="cursor-pointer"
+                          onClick={() => router.push(`/users/${user.id}`)}
+                        >
+                          <TableCell>
+                            <div className="font-medium">
+                              {user.first_name || user.last_name
+                                ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+                                : "Sans nom"}
+                            </div>
+                            {user.username && (
+                              <div className="text-xs text-muted-foreground">
+                                @{user.username}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>{user.email || "-"}</TableCell>
+                          <TableCell>
+                            {user.role === "admin" ? (
+                              <Badge variant="default">Admin</Badge>
+                            ) : user.role === "employee" ? (
+                              <Badge variant="outline">Employé</Badge>
+                            ) : user.role === "establishment" ? (
+                              <Badge variant="secondary">Établissement</Badge>
+                            ) : (
+                              <Badge variant="secondary">Client</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(user.created_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="mt-4 flex shrink-0 items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Page {page + 1} sur {totalPages}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page === 0}
+                        onClick={() => setPage(page - 1)}
+                      >
+                        Précédent
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page >= totalPages - 1}
+                        onClick={() => setPage(page + 1)}
+                      >
+                        Suivant
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

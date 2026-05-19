@@ -73,3 +73,51 @@ export type QuestEstablishmentInsert = Database["public"]["Tables"]["quests_esta
 export type AdminSetting = Database["public"]["Tables"]["admin_settings"]["Row"];
 export type AdminSettingInsert = Database["public"]["Tables"]["admin_settings"]["Insert"];
 export type AdminSettingUpdate = Database["public"]["Tables"]["admin_settings"]["Update"];
+
+// Cashpad reconciliation (migration 032).
+// Le statut est stocké en TEXT côté BDD (CHECK constraint) et la liste de
+// candidats en JSONB — on durcit ici le typage pour l'usage applicatif.
+export type ReconciliationStatus =
+  | "matched"
+  | "orphan_royaume"
+  | "ambiguous"
+  | "excluded_cashback";
+
+export interface CashpadMatchingParams {
+  establishment_id: number;
+  clock_offset_seconds: number;
+  window_seconds: number;
+  sample_size: number;
+  computed_at: string;
+}
+
+export interface CashpadSnapshotProduct {
+  name: string;
+  qty: number;
+  price_cents: number;
+  category: string | null;
+}
+
+export interface ReconciliationCandidate {
+  cashpad_receipt_id: string;
+  time_delta_seconds: number;
+  amount_cents: number;
+}
+
+type CashpadReceiptSnapshotRow =
+  Database["public"]["Tables"]["cashpad_receipts_snapshot"]["Row"];
+
+export type CashpadReceiptSnapshot = Omit<CashpadReceiptSnapshotRow, "products"> & {
+  products: CashpadSnapshotProduct[] | null;
+};
+
+type CashpadReconciliationRow =
+  Database["public"]["Tables"]["cashpad_reconciliations"]["Row"];
+
+export type CashpadReconciliation = Omit<
+  CashpadReconciliationRow,
+  "status" | "candidates"
+> & {
+  status: ReconciliationStatus;
+  candidates: ReconciliationCandidate[] | null;
+};

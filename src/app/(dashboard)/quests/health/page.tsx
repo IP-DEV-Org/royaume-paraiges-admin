@@ -126,6 +126,8 @@ function computeReference(
   }
 }
 
+type StatusFilter = "alert" | "ok" | "exclusions" | null;
+
 export default function QuestHealthPage() {
   const { toast } = useToast();
 
@@ -138,6 +140,11 @@ export default function QuestHealthPage() {
     cents: 0,
     sample: 0,
   });
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+
+  const toggleStatusFilter = (status: NonNullable<StatusFilter>) => {
+    setStatusFilter((prev) => (prev === status ? null : status));
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -211,6 +218,13 @@ export default function QuestHealthPage() {
   const excludedCount = rows.filter((r) => r.status === "excluded").length;
   const missingCount = rows.filter((r) => r.status === "missing_ref").length;
 
+  const visibleRows = useMemo(() => {
+    if (statusFilter === null) return rows;
+    if (statusFilter === "alert") return rows.filter((r) => r.status === "alert");
+    if (statusFilter === "ok") return rows.filter((r) => r.status === "ok");
+    return rows.filter((r) => r.status === "excluded" || r.status === "missing_ref");
+  }, [rows, statusFilter]);
+
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -220,8 +234,8 @@ export default function QuestHealthPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col gap-6">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Santé des quêtes actives</h1>
           <p className="text-muted-foreground">
@@ -236,76 +250,90 @@ export default function QuestHealthPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard
-          title="Quêtes actives"
-          icon={<Activity className="h-4 w-4 text-muted-foreground" />}
-          value={rows.length}
-        />
-        <StatCard
-          title="En alerte"
-          icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
-          value={alertCount}
-          subtitle={`Bonus > ${ratioPct} % du panier attendu`}
-          valueClassName={alertCount > 0 ? "text-amber-600 dark:text-amber-400" : undefined}
-        />
-        <StatCard
-          title="Conformes"
-          icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-          value={okCount}
-        />
-        <StatCard
-          title="Exclues / non mesurables"
-          icon={<MinusCircle className="h-4 w-4 text-muted-foreground" />}
-          value={excludedCount + missingCount}
-          subtitle={`${excludedCount} exclues, ${missingCount} sans référence`}
-        />
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
+        <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">
+          <section className="space-y-2">
+            <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-foreground">
+              Statuts
+            </h2>
+            <div className="space-y-2">
+              <StatCard
+                title="Quêtes actives"
+                icon={<Activity className="h-4 w-4 text-muted-foreground" />}
+                value={rows.length}
+                onClick={statusFilter ? () => setStatusFilter(null) : undefined}
+                subtitle={statusFilter ? "Cliquer pour tout afficher" : undefined}
+              />
+              <StatCard
+                title="En alerte"
+                icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+                value={alertCount}
+                subtitle={`Bonus > ${ratioPct} % du panier attendu`}
+                valueClassName={alertCount > 0 ? "text-amber-600 dark:text-amber-400" : undefined}
+                onClick={() => toggleStatusFilter("alert")}
+                active={statusFilter === "alert"}
+              />
+              <StatCard
+                title="Conformes"
+                icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                value={okCount}
+                onClick={() => toggleStatusFilter("ok")}
+                active={statusFilter === "ok"}
+              />
+              <StatCard
+                title="Exclues / non mesurables"
+                icon={<MinusCircle className="h-4 w-4 text-muted-foreground" />}
+                value={excludedCount + missingCount}
+                subtitle={`${excludedCount} exclues, ${missingCount} sans référence`}
+                onClick={() => toggleStatusFilter("exclusions")}
+                active={statusFilter === "exclusions"}
+              />
+            </div>
+          </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Paramètres appliqués</CardTitle>
-          <CardDescription>
-            Éditables depuis la page{" "}
-            <Link href="/settings" className="underline underline-offset-4">
-              Paramètres
-            </Link>
-            .
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">Seuil alerte : {ratioPct} %</Badge>
-            <Badge variant="outline">
-              Panier moyen 12m :{" "}
-              {avgTicket.cents > 0 ? formatEuro(avgTicket.cents) : "—"} ({avgTicket.sample}{" "}
-              tickets)
-            </Badge>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(["biere", "cocktail", "alcool", "soft", "boisson_chaude", "restauration"] as ConsumptionType[]).map(
-              (k) => {
-                const cents = prices[k as keyof QuestReferencePrices];
-                return (
-                  <Badge key={k} variant="secondary">
-                    {k} : {cents !== undefined ? formatEuro(cents) : "—"}
-                  </Badge>
-                );
-              }
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          <section className="space-y-2">
+            <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-foreground">
+              Paramètres appliqués
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Éditables depuis{" "}
+              <Link href="/settings" className="underline underline-offset-4">
+                Paramètres
+              </Link>
+              .
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <Badge variant="outline">Seuil alerte : {ratioPct} %</Badge>
+              <Badge variant="outline">
+                Panier moyen 12m :{" "}
+                {avgTicket.cents > 0 ? formatEuro(avgTicket.cents) : "—"} ({avgTicket.sample})
+              </Badge>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(["biere", "cocktail", "alcool", "soft", "boisson_chaude", "restauration"] as ConsumptionType[]).map(
+                (k) => {
+                  const cents = prices[k as keyof QuestReferencePrices];
+                  return (
+                    <Badge key={k} variant="secondary" className="text-xs">
+                      {k} : {cents !== undefined ? formatEuro(cents) : "—"}
+                    </Badge>
+                  );
+                }
+              )}
+            </div>
+          </section>
+        </aside>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Détail par quête</CardTitle>
-          <CardDescription>
-            Cliquez sur une ligne pour ouvrir la quête en édition.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
+        <Card className="flex min-h-0 flex-1 flex-col md:h-full md:overflow-hidden">
+          <CardHeader>
+            <CardTitle>Détail par quête</CardTitle>
+            <CardDescription>
+              {visibleRows.length} sur {rows.length} quête{rows.length > 1 ? "s" : ""}. Cliquez sur une ligne pour ouvrir la quête en édition.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0 md:overflow-hidden">
+            <div className="min-h-0 flex-1 md:overflow-y-auto">
+              <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Quête</TableHead>
@@ -318,7 +346,7 @@ export default function QuestHealthPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => {
+              {visibleRows.map((row) => {
                 const isAlert = row.status === "alert";
                 return (
                   <TableRow
@@ -403,17 +431,19 @@ export default function QuestHealthPage() {
                   </TableRow>
                 );
               })}
-              {rows.length === 0 && (
+              {visibleRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                    Aucune quête active.
+                    {rows.length === 0 ? "Aucune quête active." : "Aucune quête ne correspond au filtre."}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -45,3 +45,60 @@ export const questKeys = {
   establishments: (id: number) =>
     [...questKeys.all, "establishments", id] as const,
 };
+
+export const rewardTierKeys = {
+  all: ["rewardTiers"] as const,
+  lists: () => [...rewardTierKeys.all, "list"] as const,
+  detail: (id: number) => [...rewardTierKeys.all, "detail", id] as const,
+};
+
+export const badgeTypeKeys = {
+  all: ["badgeTypes"] as const,
+  lists: () => [...badgeTypeKeys.all, "list"] as const,
+};
+
+export const beerKeys = {
+  all: ["beers"] as const,
+  lists: () => [...beerKeys.all, "list"] as const,
+  detail: (id: number) => [...beerKeys.all, "detail", id] as const,
+  establishments: (id: number) =>
+    [...beerKeys.all, "establishments", id] as const,
+};
+
+export const breweryKeys = {
+  all: ["breweries"] as const,
+  lists: () => [...breweryKeys.all, "list"] as const,
+};
+
+export const establishmentKeys = {
+  all: ["establishments"] as const,
+  lists: () => [...establishmentKeys.all, "list"] as const,
+  detail: (id: number) => [...establishmentKeys.all, "detail", id] as const,
+  beers: (id: number) => [...establishmentKeys.all, "beers", id] as const,
+};
+
+export const adminSettingsKeys = {
+  all: ["adminSettings"] as const,
+  questAlertRatio: () => [...adminSettingsKeys.all, "questAlertRatio"] as const,
+  questReferencePrices: () =>
+    [...adminSettingsKeys.all, "questReferencePrices"] as const,
+  avgTicket12m: () => [...adminSettingsKeys.all, "avgTicket12m"] as const,
+};
+
+export const dashboardKeys = {
+  all: ["dashboard"] as const,
+  alerts: () => [...dashboardKeys.all, "alerts"] as const,
+  activity: () => [...dashboardKeys.all, "activity"] as const,
+  gameState: () => [...dashboardKeys.all, "gameState"] as const,
+  financialHealth: () => [...dashboardKeys.all, "financialHealth"] as const,
+};
+
+export const reconciliationKeys = {
+  all: ["reconciliation"] as const,
+  list: (filters: Record<string, unknown>) =>
+    [...reconciliationKeys.all, "list", filters] as const,
+  candidates: (receiptId: number, windowSeconds: number) =>
+    [...reconciliationKeys.all, "candidates", receiptId, windowSeconds] as const,
+  candidatesByIds: (ids: string[]) =>
+    [...reconciliationKeys.all, "candidatesByIds", [...ids].sort()] as const,
+};

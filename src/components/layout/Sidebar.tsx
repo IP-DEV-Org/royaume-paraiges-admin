@@ -20,9 +20,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Shield,
-  Activity,
   Scale,
   Coins,
+  Award,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,9 +38,11 @@ import { useRouter } from "next/navigation";
 
 const navigationGroups = [
   {
-    title: null,
+    title: "Vue d'ensemble",
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
+      { name: "Analytics", href: "/analytics", icon: BarChart3 },
+      { name: "Réconciliation Cashpad", href: "/reconciliation", icon: Scale },
     ],
   },
   {
@@ -48,24 +50,19 @@ const navigationGroups = [
     items: [
       { name: "Utilisateurs", href: "/users", icon: Users },
       { name: "Tickets de caisse", href: "/receipts", icon: Receipt },
-      { name: "Réconciliation Cashpad", href: "/reconciliation", icon: Scale },
-    ],
-  },
-  {
-    title: "Quêtes",
-    items: [
-      { name: "Quêtes", href: "/quests", icon: Target },
-      { name: "Santé des quêtes", href: "/quests/health", icon: Activity },
-    ],
-  },
-  {
-    title: "Récompenses",
-    items: [
       { name: "Coupons", href: "/coupons", icon: Ticket },
       { name: "Bonus cashback", href: "/rewards/cashback-gains", icon: Coins },
-      { name: "Configuration", href: "/rewards", icon: Trophy },
+      { name: "Historique de distribution", href: "/history", icon: History },
+    ],
+  },
+  {
+    title: "Gamification",
+    items: [
+      { name: "Quêtes", href: "/quests", icon: Target },
+      { name: "Paliers & saison", href: "/rewards", icon: Trophy },
+      { name: "Badges", href: "/rewards/achievements", icon: Award },
+      { name: "Niveaux & lore", href: "/content/storytelling", icon: BookOpen },
       { name: "Modèles de coupons", href: "/templates", icon: FileText },
-      { name: "Historique", href: "/history", icon: History },
     ],
   },
   {
@@ -73,30 +70,13 @@ const navigationGroups = [
     items: [
       { name: "Bières", href: "/content/beers", icon: Beer },
       { name: "Établissements", href: "/content/establishments", icon: Building2 },
-      { name: "Storytelling", href: "/content/storytelling", icon: BookOpen },
     ],
   },
   {
-    title: null,
-    items: [
-      { name: "Analytics", href: "/analytics", icon: BarChart3 },
-    ],
-  },
-  {
-    title: "Conformité",
+    title: "Système",
     items: [
       { name: "RGPD", href: "/gdpr", icon: Shield },
-    ],
-  },
-  {
-    title: "Documentation",
-    items: [
       { name: "Documentation", href: "/documentation", icon: BookText },
-    ],
-  },
-  {
-    title: null,
-    items: [
       { name: "Paramètres", href: "/settings", icon: SettingsIcon },
     ],
   },

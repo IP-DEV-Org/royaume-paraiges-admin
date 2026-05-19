@@ -5,6 +5,7 @@ export interface UserFilters {
   role?: UserRole;
   search?: string;
   includeDeleted?: boolean;
+  includeTest?: boolean;
 }
 
 export interface UserWithStats extends Profile {
@@ -38,6 +39,10 @@ export async function getUsers(
 
   if (!filters?.includeDeleted) {
     query = query.is("deleted_at", null);
+  }
+
+  if (!filters?.includeTest) {
+    query = query.eq("is_test", false);
   }
 
   if (filters?.role) {
