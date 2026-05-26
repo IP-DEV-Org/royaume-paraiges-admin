@@ -5,6 +5,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Table,
   TableBody,
   TableCell,
@@ -13,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils";
+import { Info } from "lucide-react";
 import type { StockData } from "@/lib/services/analyticsService";
 
 interface StockDetailCardProps {
@@ -23,7 +29,17 @@ export function StockDetailCard({ stock }: StockDetailCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Détail par catégorie</CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-base">Détail par catégorie</CardTitle>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[280px] text-xs">
+              Ouverture / fermeture = stock de PdB en circulation aux bornes de la période. Les dépenses sont réparties par allocation proportionnelle entre catégories.
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </CardHeader>
       <CardContent>
         <Table>

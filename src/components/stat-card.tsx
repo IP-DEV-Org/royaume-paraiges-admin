@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { Info } from "lucide-react";
 import { type ReactNode } from "react";
 
 interface StatCardProps {
@@ -7,6 +9,7 @@ interface StatCardProps {
   icon: ReactNode;
   value: string | number;
   subtitle?: string;
+  info?: string;
   valueClassName?: string;
   onClick?: () => void;
   active?: boolean;
@@ -17,6 +20,7 @@ export function StatCard({
   icon,
   value,
   subtitle,
+  info,
   valueClassName,
   onClick,
   active,
@@ -31,7 +35,19 @@ export function StatCard({
       onClick={onClick}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          {info && (
+            <Tooltip>
+              <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[280px] text-xs">
+                {info}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
         {icon}
       </CardHeader>
       <CardContent>

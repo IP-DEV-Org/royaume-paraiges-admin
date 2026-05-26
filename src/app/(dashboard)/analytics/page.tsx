@@ -316,6 +316,7 @@ export default function AnalyticsPage() {
                   icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
                   value={revenue?.salesCount ?? 0}
                   subtitle="Scannées via le Royaume"
+                  info="Nombre de tickets enregistrés via le scan QR Royaume sur la période. Source : table receipts, hors utilisateurs test."
                   onClick={() => openDrilldown("receipts", "Ventes enregistrées")}
                 />
                 <StatCard
@@ -323,6 +324,7 @@ export default function AnalyticsPage() {
                   icon={<Euro className="h-4 w-4 text-muted-foreground" />}
                   value={formatCurrency(revenue?.totalEuros ?? 0)}
                   subtitle={`Carte : ${formatCurrency(revenue?.cardTotal ?? 0)} / Espèces : ${formatCurrency(revenue?.cashTotal ?? 0)}`}
+                  info="Total des paiements carte + espèces enregistrés via le Royaume. Source : receipt_lines agrégées par méthode de paiement. N'inclut pas les paiements hors Royaume."
                   onClick={() => openDrilldown("receipts", "Recettes enregistrées")}
                 />
                 <StatCard
@@ -330,6 +332,7 @@ export default function AnalyticsPage() {
                   icon={<Coins className="h-4 w-4 text-bronze" />}
                   value={formatCurrency(revenue?.cashbackSpentTotal ?? 0)}
                   subtitle="Utilisés sur les commandes Royaume"
+                  info="PdB utilisés comme moyen de paiement sur les commandes. Source : receipt_lines où la méthode de paiement est cashback."
                   onClick={() => openDrilldown("spendings", "PdB dépensés")}
                 />
               </div>
@@ -361,6 +364,7 @@ export default function AnalyticsPage() {
                   icon={<TrendingUp className="h-4 w-4 text-bronze" />}
                   value={formatCurrency(debts?.pdbOrganic ?? 0)}
                   subtitle="Dépenses euros"
+                  info="PdB gagnés sur les dépenses en euros (cashback classique). Source : table gains où source_type = receipt. Filtrable par établissement/employé."
                   onClick={() => openDrilldown("gainsOrganic", "PdB Organiques")}
                 />
                 <StatCard
@@ -368,6 +372,7 @@ export default function AnalyticsPage() {
                   icon={<Trophy className="h-4 w-4 text-gold" />}
                   value={formatCurrency(debts?.pdbRewards ?? 0)}
                   subtitle="Quêtes et classement"
+                  info="PdB gagnés via quêtes et classement leaderboard. Source : table gains où source_type = bonus_cashback_quest ou bonus_cashback_leaderboard. Toujours global, non filtrable par établissement/employé."
                   onClick={() => openDrilldown("gainsRewards", "PdB Récompenses")}
                 />
                 <StatCard
@@ -375,6 +380,7 @@ export default function AnalyticsPage() {
                   icon={<Ticket className="h-4 w-4 text-muted-foreground" />}
                   value={debts?.activePctCouponsCount ?? 0}
                   subtitle="Non utilisés, non expirés"
+                  info="Nombre de coupons à pourcentage non utilisés et non expirés. Source : table coupons (used = false, percentage non null). Toujours global."
                   onClick={() => openDrilldown("couponsActive", "Coupons % actifs")}
                 />
                 <StatCard
@@ -382,6 +388,7 @@ export default function AnalyticsPage() {
                   icon={<Coins className="h-4 w-4 text-muted-foreground" />}
                   value={formatCurrency(debts?.pdbTotal ?? 0)}
                   subtitle="Sur la période"
+                  info="Somme de tous les PdB crédités sur la période : organiques + récompenses + bonus coupons. Source : RPC get_analytics_debts."
                   onClick={() => openDrilldown("gainsAll", "Total dettes PdB")}
                 />
               </div>
@@ -412,12 +419,14 @@ export default function AnalyticsPage() {
                   icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
                   value={formatCurrency(stock?.opening.total ?? 0)}
                   subtitle="Début de période"
+                  info="Total des PdB en circulation au début de la période. Calcul : somme des gains − somme des dépenses, avant la date de début."
                 />
                 <StatCard
                   title="Stock PdB fin de période"
                   icon={<Coins className="h-4 w-4 text-bronze" />}
                   value={formatCurrency(stock?.closing.total ?? 0)}
                   subtitle="Fin de période"
+                  info="Total des PdB en circulation à la fin de la période. Calcul : somme des gains − somme des dépenses, avant la date de fin."
                 />
                 {(() => {
                   const netMovement =
@@ -437,6 +446,7 @@ export default function AnalyticsPage() {
                       value={`${netMovement >= 0 ? "+" : ""}${formatCurrency(netMovement)}`}
                       valueClassName={netMovement >= 0 ? "text-green-600" : "text-red-600"}
                       subtitle="Gagnés - Dépensés"
+                      info="Variation nette des PdB sur la période. Calcul : (PdB organiques gagnés + PdB récompenses gagnés) − PdB dépensés."
                     />
                   );
                 })()}
@@ -454,6 +464,7 @@ export default function AnalyticsPage() {
                           ? `${formatCurrency(cashbackEarned)} de PdB pour ${formatCurrency(eurosSpent)} dépensés`
                           : "Aucune dépense sur la période"
                       }
+                      info="Ratio entre les PdB totaux crédités et les euros enregistrés via le Royaume. Calcul : (total dettes PdB ÷ recettes enregistrées) × 100."
                     />
                   );
                 })()}

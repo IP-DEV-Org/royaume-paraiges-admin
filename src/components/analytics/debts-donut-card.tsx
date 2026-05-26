@@ -7,6 +7,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Tooltip as ChartTooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   PieChart,
   Pie,
   Cell,
@@ -15,6 +20,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
+import { Info } from "lucide-react";
 import type { DebtsData } from "@/lib/services/analyticsService";
 
 const COLORS = {
@@ -38,9 +44,17 @@ export function DebtsDonutCard({ debts }: DebtsDonutCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          Répartition des dettes PdB
-        </CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-base">Répartition des dettes PdB</CardTitle>
+          <ChartTooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[280px] text-xs">
+              Organiques = cashback sur dépenses €. Récompenses = PdB quêtes + leaderboard. Bonus Coupons = PdB crédités via coupons montant fixe.
+            </TooltipContent>
+          </ChartTooltip>
+        </div>
       </CardHeader>
       <CardContent>
         {pieTotal === 0 ? (

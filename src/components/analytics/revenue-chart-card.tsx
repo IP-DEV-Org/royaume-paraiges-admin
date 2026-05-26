@@ -8,6 +8,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Tooltip as ChartTooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   AreaChart,
   Area,
   XAxis,
@@ -17,6 +22,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { cn, formatCurrency } from "@/lib/utils";
+import { Info } from "lucide-react";
 import type { DailyRevenue } from "@/lib/services/analyticsService";
 
 const SERIES = [
@@ -52,7 +58,17 @@ export function RevenueChartCard({ data }: RevenueChartCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Détail quotidien</CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-base">Détail quotidien</CardTitle>
+          <ChartTooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[280px] text-xs">
+              Cashpad = paiements carte + espèces par jour. PdB dépensés = cashback utilisé en paiement par jour. Source : receipts + receipt_lines.
+            </TooltipContent>
+          </ChartTooltip>
+        </div>
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (

@@ -8,6 +8,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Tooltip as ChartTooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ComposedChart,
   Area,
   Line,
@@ -18,6 +23,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { cn, formatCurrency } from "@/lib/utils";
+import { Info } from "lucide-react";
 import type { DailyCashback } from "@/lib/services/analyticsService";
 
 const SERIES = [
@@ -58,7 +64,17 @@ export function CashbackChartCard({ data }: CashbackChartCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Crédité vs Dépensé</CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-base">Crédité vs Dépensé</CardTitle>
+          <ChartTooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[280px] text-xs">
+              Organique = PdB gagnés sur dépenses €. Récompenses = PdB quêtes + leaderboard. Dépensé = PdB utilisés en paiement. Solde net = organique + récompenses − dépensé.
+            </TooltipContent>
+          </ChartTooltip>
+        </div>
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
