@@ -109,22 +109,32 @@ export async function toggleQuestActive(id: number, isActive: boolean): Promise<
   if (error) throw error;
 }
 
+function normalizeSlug(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
 async function findAvailableDuplicateSlug(baseSlug: string): Promise<string> {
+  const normalized = normalizeSlug(baseSlug);
   const supabase = createClient();
   const { data, error } = await supabase
     .from("quests")
     .select("slug")
-    .like("slug", `${baseSlug}_duplicate%`);
+    .like("slug", `${normalized}_duplicate%`);
 
   if (error) throw error;
 
   const existing = new Set(((data || []) as { slug: string }[]).map((r) => r.slug));
-  const candidate = `${baseSlug}_duplicate`;
+  const candidate = `${normalized}_duplicate`;
   if (!existing.has(candidate)) return candidate;
 
   let i = 2;
-  while (existing.has(`${baseSlug}_duplicate_${i}`)) i++;
-  return `${baseSlug}_duplicate_${i}`;
+  while (existing.has(`${normalized}_duplicate_${i}`)) i++;
+  return `${normalized}_duplicate_${i}`;
 }
 
 export async function duplicateQuest(id: number): Promise<Quest> {
