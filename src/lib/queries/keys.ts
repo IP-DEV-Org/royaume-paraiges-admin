@@ -75,6 +75,8 @@ export const establishmentKeys = {
   lists: () => [...establishmentKeys.all, "list"] as const,
   detail: (id: number) => [...establishmentKeys.all, "detail", id] as const,
   beers: (id: number) => [...establishmentKeys.all, "beers", id] as const,
+  consumptionTypes: (id: number) =>
+    [...establishmentKeys.all, "consumptionTypes", id] as const,
 };
 
 export const adminSettingsKeys = {

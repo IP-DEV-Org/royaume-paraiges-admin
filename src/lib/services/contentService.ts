@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import type {
   BeerUpdate as BeerUpdateType,
   EstablishmentUpdate as EstablishmentUpdateType,
+  ConsumptionType,
 } from "@/types/database";
 
 // Types pour le contenu
@@ -564,4 +565,54 @@ export async function getXpPerEuro(): Promise<number> {
 
   if (error) throw error;
   return parseFloat(data.value);
+}
+
+// ============================================================================
+// Establishment Consumption Types
+// ============================================================================
+
+export interface EstablishmentConsumptionTypeRow {
+  id: number;
+  establishment_id: number;
+  consumption_type: ConsumptionType;
+  is_active: boolean;
+  created_at: string;
+}
+
+export async function getEstablishmentConsumptionTypes(
+  establishmentId: number
+): Promise<EstablishmentConsumptionTypeRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("establishment_consumption_types")
+    .select("*")
+    .eq("establishment_id", establishmentId)
+    .order("consumption_type");
+
+  if (error) throw error;
+  return (data || []) as EstablishmentConsumptionTypeRow[];
+}
+
+export async function setEstablishmentConsumptionTypes(
+  establishmentId: number,
+  types: { consumption_type: ConsumptionType; is_active: boolean }[]
+): Promise<void> {
+  const supabase = createClient();
+
+  await (supabase.from("establishment_consumption_types") as any)
+    .delete()
+    .eq("establishment_id", establishmentId);
+
+  if (types.length === 0) return;
+
+  const rows = types.map((t) => ({
+    establishment_id: establishmentId,
+    consumption_type: t.consumption_type,
+    is_active: t.is_active,
+  }));
+
+  const { error } = await (supabase.from("establishment_consumption_types") as any)
+    .insert(rows);
+
+  if (error) throw error;
 }

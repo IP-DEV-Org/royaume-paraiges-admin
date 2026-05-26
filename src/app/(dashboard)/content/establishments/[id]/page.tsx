@@ -48,7 +48,11 @@ import {
   uploadEstablishmentImage,
   deleteEstablishmentImage,
   getImageUrl,
+  getEstablishmentConsumptionTypes,
+  setEstablishmentConsumptionTypes,
 } from "@/lib/services/contentService";
+import type { ConsumptionType } from "@/types/database";
+import { Switch } from "@/components/ui/switch";
 import {
   getAnalyticsRevenue,
   getAnalyticsDebts,
@@ -59,6 +63,15 @@ import {
 import { PeriodSelector, getPresetDates, type PeriodDates } from "@/components/period-selector";
 import { useToast } from "@/components/ui/use-toast";
 import { formatCurrency } from "@/lib/utils";
+
+const ALL_CONSUMPTION_TYPES: { type: ConsumptionType; label: string; icon: string }[] = [
+  { type: "biere", label: "Biere", icon: "\u{1F37A}" },
+  { type: "cocktail", label: "Cocktail", icon: "\u{1F378}" },
+  { type: "alcool", label: "Alcool", icon: "\u{1F943}" },
+  { type: "soft", label: "Soft", icon: "\u{1F964}" },
+  { type: "boisson_chaude", label: "Boisson chaude", icon: "☕" },
+  { type: "restauration", label: "Restauration", icon: "\u{1F37D}️" },
+];
 
 export default function EditEstablishmentPage() {
   const router = useRouter();
@@ -79,6 +92,10 @@ export default function EditEstablishmentPage() {
   const [currentLogo, setCurrentLogo] = useState<string | null>(null);
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  // Consumption types
+  const [consumptionTypesConfigured, setConsumptionTypesConfigured] = useState(false);
+  const [activeConsumptionTypes, setActiveConsumptionTypes] = useState<Set<ConsumptionType>>(new Set());
 
   const [form, setForm] = useState({
     title: "",
@@ -124,6 +141,19 @@ export default function EditEstablishmentPage() {
           });
           setCurrentFeaturedImage(establishment.featured_image);
           setCurrentLogo(establishment.logo);
+
+          // Fetch consumption types
+          try {
+            const ctRows = await getEstablishmentConsumptionTypes(id);
+            if (ctRows.length > 0) {
+              setConsumptionTypesConfigured(true);
+              setActiveConsumptionTypes(
+                new Set(ctRows.filter((r) => r.is_active).map((r) => r.consumption_type))
+              );
+            }
+          } catch {
+            // Non-blocking
+          }
         } else {
           toast({
             variant: "destructive",
@@ -264,6 +294,20 @@ export default function EditEstablishmentPage() {
         featured_image: newFeaturedPath,
         logo: newLogoPath,
       });
+
+      // Save consumption types
+      if (consumptionTypesConfigured) {
+        await setEstablishmentConsumptionTypes(
+          id,
+          ALL_CONSUMPTION_TYPES.map((ct) => ({
+            consumption_type: ct.type,
+            is_active: activeConsumptionTypes.has(ct.type),
+          }))
+        );
+      } else {
+        // No config = delete all rows (fallback to "all active")
+        await setEstablishmentConsumptionTypes(id, []);
+      }
 
       toast({ title: "Établissement mis à jour" });
       router.push("/content/establishments");
@@ -575,6 +619,64 @@ export default function EditEstablishmentPage() {
                     Enregistrer
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Types de consommation</CardTitle>
+                <CardDescription>
+                  Activez les types de produits proposés par cet établissement. Si aucun type n'est configuré, tous sont affichés par défaut dans le scanner.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="configure-consumption-types"
+                    checked={consumptionTypesConfigured}
+                    onCheckedChange={(checked) => {
+                      setConsumptionTypesConfigured(checked);
+                      if (checked && activeConsumptionTypes.size === 0) {
+                        setActiveConsumptionTypes(
+                          new Set(ALL_CONSUMPTION_TYPES.map((ct) => ct.type))
+                        );
+                      }
+                    }}
+                  />
+                  <Label htmlFor="configure-consumption-types">
+                    Configurer les types de consommation
+                  </Label>
+                </div>
+
+                {consumptionTypesConfigured && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {ALL_CONSUMPTION_TYPES.map((ct) => (
+                      <div
+                        key={ct.type}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{ct.icon}</span>
+                          <span className="text-sm font-medium">{ct.label}</span>
+                        </div>
+                        <Switch
+                          checked={activeConsumptionTypes.has(ct.type)}
+                          onCheckedChange={(checked) => {
+                            setActiveConsumptionTypes((prev) => {
+                              const next = new Set(prev);
+                              if (checked) {
+                                next.add(ct.type);
+                              } else {
+                                next.delete(ct.type);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </form>
