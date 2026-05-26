@@ -518,10 +518,20 @@ export async function createLevelThreshold(
   data: { level: number; name: string; xp_required: number; description?: string | null; lore?: string | null }
 ): Promise<LevelThreshold> {
   const supabase = createClient();
+
+  const { data: maxRow } = await supabase
+    .from("level_thresholds")
+    .select("id")
+    .order("id", { ascending: false })
+    .limit(1)
+    .single();
+  const nextId = ((maxRow as { id: number } | null)?.id ?? 0) + 1;
+
   const now = new Date().toISOString();
   const { data: created, error } = await (supabase
     .from("level_thresholds") as any)
     .insert({
+      id: nextId,
       ...data,
       sort_order: data.level,
       created_at: now,
