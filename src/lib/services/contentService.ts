@@ -68,7 +68,7 @@ export interface BeersEstablishments {
 // URL Supabase Storage pour les images
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  "https://uflgfsoekkgegdgecubb.supabase.co";
+  "https://kioysoveqemzjolfwpnu.supabase.co";
 const STORAGE_BUCKET = "content-assets";
 
 /**
@@ -502,7 +502,7 @@ export async function getLevelThresholds(): Promise<LevelThreshold[]> {
 
 export async function updateLevelThreshold(
   id: number,
-  data: { lore?: string | null }
+  data: { name?: string; xp_required?: number; description?: string | null; lore?: string | null }
 ): Promise<void> {
   const supabase = createClient();
   const payload = { ...data, updated_at: new Date().toISOString() };

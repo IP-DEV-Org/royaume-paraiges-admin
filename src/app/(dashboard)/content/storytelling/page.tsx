@@ -9,6 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
@@ -30,15 +32,21 @@ import { Loader2, Pencil, BookOpen } from "lucide-react";
 import { getLevelThresholds, getXpPerEuro, updateLevelThreshold } from "@/lib/services/contentService";
 import type { LevelThreshold } from "@/lib/services/contentService";
 import { levelToCoefficient, levelToRankName } from "@/lib/services/levelService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
+
+interface EditForm {
+  name: string;
+  xp_required: string;
+  description: string;
+  lore: string;
+}
 
 export default function StorytellingPage() {
-  const { toast } = useToast();
   const [levels, setLevels] = useState<LevelThreshold[]>([]);
   const [xpPerEuro, setXpPerEuro] = useState<number>(10);
   const [loading, setLoading] = useState(true);
   const [editingLevel, setEditingLevel] = useState<LevelThreshold | null>(null);
-  const [loreText, setLoreText] = useState("");
+  const [form, setForm] = useState<EditForm>({ name: "", xp_required: "", description: "", lore: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -50,37 +58,56 @@ export default function StorytellingPage() {
         ]);
         setLevels(data);
         setXpPerEuro(ratio);
-      } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
-          description: "Impossible de charger les niveaux",
-        });
+      } catch {
+        toast.error("Impossible de charger les niveaux");
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [toast]);
+  }, []);
+
+  const openEdit = (level: LevelThreshold) => {
+    setEditingLevel(level);
+    setForm({
+      name: level.name,
+      xp_required: String(level.xp_required),
+      description: level.description || "",
+      lore: level.lore || "",
+    });
+  };
 
   const handleSave = async () => {
     if (!editingLevel) return;
+
+    const xpValue = parseInt(form.xp_required, 10);
+    if (!form.name.trim()) {
+      toast.error("Le nom du niveau est obligatoire");
+      return;
+    }
+    if (isNaN(xpValue) || xpValue < 0) {
+      toast.error("L'XP requis doit être un nombre positif");
+      return;
+    }
+
     setSaving(true);
     try {
-      await updateLevelThreshold(editingLevel.id, { lore: loreText || null });
+      const payload = {
+        name: form.name.trim(),
+        xp_required: xpValue,
+        description: form.description.trim() || null,
+        lore: form.lore.trim() || null,
+      };
+      await updateLevelThreshold(editingLevel.id, payload);
       setLevels((prev) =>
         prev.map((l) =>
-          l.id === editingLevel.id ? { ...l, lore: loreText || null } : l
+          l.id === editingLevel.id ? { ...l, ...payload } : l
         )
       );
-      toast({ title: "Lore mis à jour" });
+      toast.success("Niveau mis à jour");
       setEditingLevel(null);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: "Impossible de modifier le lore",
-      });
+    } catch {
+      toast.error("Impossible de modifier le niveau");
     } finally {
       setSaving(false);
     }
@@ -155,10 +182,7 @@ export default function StorytellingPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setEditingLevel(level);
-                        setLoreText(level.lore || "");
-                      }}
+                      onClick={() => openEdit(level)}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -172,21 +196,58 @@ export default function StorytellingPage() {
       </Card>
 
       <Dialog open={!!editingLevel} onOpenChange={(open) => !open && setEditingLevel(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              Modifier le lore du niveau {editingLevel?.level} — {editingLevel?.name}
+              Modifier le niveau {editingLevel?.level}
             </DialogTitle>
             <DialogDescription>
-              Ce texte sera affiché sur la homepage pour les joueurs de ce niveau
+              Rang : {editingLevel ? levelToRankName(editingLevel.level) : ""} · Coef. PdB : × {editingLevel ? levelToCoefficient(editingLevel.level).toLocaleString("fr-FR", { minimumFractionDigits: 1 }) : ""}
             </DialogDescription>
           </DialogHeader>
-          <Textarea
-            value={loreText}
-            onChange={(e) => setLoreText(e.target.value)}
-            placeholder="Ex: Bienvenue dans le Royaume, jeune aventurier..."
-            rows={5}
-          />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nom du niveau</Label>
+                <Input
+                  id="edit-name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Ex : Écuyer I"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-xp">XP requis</Label>
+                <Input
+                  id="edit-xp"
+                  type="number"
+                  min={0}
+                  value={form.xp_required}
+                  onChange={(e) => setForm((f) => ({ ...f, xp_required: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Description</Label>
+              <Textarea
+                id="edit-description"
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Description courte du niveau..."
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-lore">Lore</Label>
+              <Textarea
+                id="edit-lore"
+                value={form.lore}
+                onChange={(e) => setForm((f) => ({ ...f, lore: e.target.value }))}
+                placeholder="Ex : Bienvenue dans le Royaume, jeune aventurier..."
+                rows={4}
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingLevel(null)}>
               Annuler
