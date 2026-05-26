@@ -514,6 +514,36 @@ export async function updateLevelThreshold(
   if (error) throw error;
 }
 
+export async function createLevelThreshold(
+  data: { level: number; name: string; xp_required: number; description?: string | null; lore?: string | null }
+): Promise<LevelThreshold> {
+  const supabase = createClient();
+  const now = new Date().toISOString();
+  const { data: created, error } = await (supabase
+    .from("level_thresholds") as any)
+    .insert({
+      ...data,
+      sort_order: data.level,
+      created_at: now,
+      updated_at: now,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return created as LevelThreshold;
+}
+
+export async function deleteLevelThreshold(id: number): Promise<void> {
+  const supabase = createClient();
+  const { error } = await (supabase
+    .from("level_thresholds") as any)
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
 export async function getXpPerEuro(): Promise<number> {
   const supabase = createClient();
   const { data, error } = await (supabase

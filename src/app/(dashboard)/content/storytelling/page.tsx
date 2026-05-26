@@ -28,26 +28,49 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Pencil, BookOpen } from "lucide-react";
-import { getLevelThresholds, getXpPerEuro, updateLevelThreshold } from "@/lib/services/contentService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Pencil, BookOpen, Plus, Trash2 } from "lucide-react";
+import {
+  getLevelThresholds,
+  getXpPerEuro,
+  updateLevelThreshold,
+  createLevelThreshold,
+  deleteLevelThreshold,
+} from "@/lib/services/contentService";
 import type { LevelThreshold } from "@/lib/services/contentService";
 import { levelToCoefficient, levelToRankName } from "@/lib/services/levelService";
 import { toast } from "sonner";
 
-interface EditForm {
+interface LevelForm {
   name: string;
   xp_required: string;
   description: string;
   lore: string;
 }
 
+const emptyForm: LevelForm = { name: "", xp_required: "", description: "", lore: "" };
+
 export default function StorytellingPage() {
   const [levels, setLevels] = useState<LevelThreshold[]>([]);
   const [xpPerEuro, setXpPerEuro] = useState<number>(10);
   const [loading, setLoading] = useState(true);
+
   const [editingLevel, setEditingLevel] = useState<LevelThreshold | null>(null);
-  const [form, setForm] = useState<EditForm>({ name: "", xp_required: "", description: "", lore: "" });
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState<LevelForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<LevelThreshold | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,32 +100,48 @@ export default function StorytellingPage() {
     });
   };
 
-  const handleSave = async () => {
-    if (!editingLevel) return;
+  const openCreate = () => {
+    const maxLevel = levels.length > 0 ? Math.max(...levels.map((l) => l.level)) : 0;
+    const lastXp = levels.length > 0 ? levels[levels.length - 1]?.xp_required ?? 0 : 0;
+    setForm({
+      name: "",
+      xp_required: String(lastXp > 0 ? lastXp + 1000 : 0),
+      description: "",
+      lore: "",
+    });
+    setCreating(true);
+  };
 
+  const validateForm = (): { name: string; xp_required: number; description: string | null; lore: string | null } | null => {
     const xpValue = parseInt(form.xp_required, 10);
     if (!form.name.trim()) {
       toast.error("Le nom du niveau est obligatoire");
-      return;
+      return null;
     }
     if (isNaN(xpValue) || xpValue < 0) {
       toast.error("L'XP requis doit être un nombre positif");
-      return;
+      return null;
     }
+    return {
+      name: form.name.trim(),
+      xp_required: xpValue,
+      description: form.description.trim() || null,
+      lore: form.lore.trim() || null,
+    };
+  };
+
+  const handleSave = async () => {
+    if (!editingLevel) return;
+    const payload = validateForm();
+    if (!payload) return;
 
     setSaving(true);
     try {
-      const payload = {
-        name: form.name.trim(),
-        xp_required: xpValue,
-        description: form.description.trim() || null,
-        lore: form.lore.trim() || null,
-      };
       await updateLevelThreshold(editingLevel.id, payload);
       setLevels((prev) =>
-        prev.map((l) =>
-          l.id === editingLevel.id ? { ...l, ...payload } : l
-        )
+        prev
+          .map((l) => (l.id === editingLevel.id ? { ...l, ...payload } : l))
+          .sort((a, b) => a.xp_required - b.xp_required)
       );
       toast.success("Niveau mis à jour");
       setEditingLevel(null);
@@ -112,6 +151,48 @@ export default function StorytellingPage() {
       setSaving(false);
     }
   };
+
+  const handleCreate = async () => {
+    const payload = validateForm();
+    if (!payload) return;
+
+    const nextLevel = levels.length > 0 ? Math.max(...levels.map((l) => l.level)) + 1 : 1;
+
+    setSaving(true);
+    try {
+      const created = await createLevelThreshold({ level: nextLevel, ...payload });
+      setLevels((prev) => [...prev, created].sort((a, b) => a.xp_required - b.xp_required));
+      toast.success("Niveau créé");
+      setCreating(false);
+    } catch {
+      toast.error("Impossible de créer le niveau");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteLevelThreshold(deleteTarget.id);
+      setLevels((prev) => prev.filter((l) => l.id !== deleteTarget.id));
+      toast.success("Niveau supprimé");
+      setDeleteTarget(null);
+      setEditingLevel(null);
+    } catch {
+      toast.error("Impossible de supprimer le niveau");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const closeDialog = () => {
+    setEditingLevel(null);
+    setCreating(false);
+  };
+
+  const isDialogOpen = !!editingLevel || creating;
 
   if (loading) {
     return (
@@ -123,11 +204,17 @@ export default function StorytellingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Storytelling</h1>
-        <p className="text-muted-foreground">
-          Gérez les textes narratifs affichés sur la homepage selon le niveau du joueur
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Storytelling</h1>
+          <p className="text-muted-foreground">
+            Gérez les textes narratifs affichés sur la homepage selon le niveau du joueur
+          </p>
+        </div>
+        <Button onClick={openCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          Ajouter un niveau
+        </Button>
       </div>
 
       <Card>
@@ -195,14 +282,19 @@ export default function StorytellingPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!editingLevel} onOpenChange={(open) => !open && setEditingLevel(null)}>
+      {/* Dialog création / édition */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              Modifier le niveau {editingLevel?.level}
+              {creating
+                ? "Ajouter un niveau"
+                : `Modifier le niveau ${editingLevel?.level}`}
             </DialogTitle>
             <DialogDescription>
-              Rang : {editingLevel ? levelToRankName(editingLevel.level) : ""} · Coef. PdB : × {editingLevel ? levelToCoefficient(editingLevel.level).toLocaleString("fr-FR", { minimumFractionDigits: 1 }) : ""}
+              {creating
+                ? `Ce sera le niveau ${levels.length > 0 ? Math.max(...levels.map((l) => l.level)) + 1 : 1}`
+                : `Rang : ${editingLevel ? levelToRankName(editingLevel.level) : ""} · Coef. PdB : × ${editingLevel ? levelToCoefficient(editingLevel.level).toLocaleString("fr-FR", { minimumFractionDigits: 1 }) : ""}`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -248,17 +340,52 @@ export default function StorytellingPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingLevel(null)}>
-              Annuler
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Enregistrer
-            </Button>
+          <DialogFooter className="flex-row justify-between sm:justify-between">
+            {editingLevel && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteTarget(editingLevel)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Supprimer
+              </Button>
+            )}
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" onClick={closeDialog}>
+                Annuler
+              </Button>
+              <Button onClick={creating ? handleCreate : handleSave} disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {creating ? "Créer" : "Enregistrer"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation suppression */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer le niveau {deleteTarget?.level} ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Le niveau « {deleteTarget?.name} » sera définitivement supprimé. Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
