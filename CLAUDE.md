@@ -97,7 +97,7 @@ Dans `QuestForm.submit` :
 | `quest_completed` | Nb sous-périodes | Méta-quête, incompatible avec `weekly` |
 | `consumption_count` | Nombre | Requiert `quests.consumption_type` non-NULL |
 
-ENUM `consumption_type` : `cocktail`, `biere`, `alcool`, `soft`, `boisson_chaude`, `restauration`.
+ENUM `consumption_type` : `cocktail`, `biere`, `alcool`, `soft`, `boisson_chaude`, `restauration`, `boucherie`.
 
 Statuts `quest_progress.status` : `in_progress`, `completed`, `rewarded`, `expired` (via cron quotidien `expire_quest_progress()`).
 
@@ -138,7 +138,7 @@ npm run supabase:types
 ## Variables d'environnement
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://uflgfsoekkgegdgecubb.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://kioysoveqemzjolfwpnu.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
 ```
 
@@ -323,7 +323,7 @@ Si tu modifies cette logique, **vérifie cashback_earned** : la saisie "50" doit
 
 ## Liens Utiles
 
-- **Supabase Dashboard** : https://app.supabase.com/project/uflgfsoekkgegdgecubb
+- **Supabase Dashboard** : https://app.supabase.com/project/kioysoveqemzjolfwpnu
 
 ---
 

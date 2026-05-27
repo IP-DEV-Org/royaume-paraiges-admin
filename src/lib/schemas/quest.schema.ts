@@ -17,6 +17,7 @@ export const consumptionTypeSchema = z.enum([
   "soft",
   "boisson_chaude",
   "restauration",
+  "boucherie",
 ]);
 
 export const periodTypeSchema = z.enum(["weekly", "monthly", "yearly"]);
