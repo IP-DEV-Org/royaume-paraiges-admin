@@ -71,6 +71,7 @@ const ALL_CONSUMPTION_TYPES: { type: ConsumptionType; label: string; icon: strin
   { type: "soft", label: "Soft", icon: "\u{1F964}" },
   { type: "boisson_chaude", label: "Boisson chaude", icon: "☕" },
   { type: "restauration", label: "Restauration", icon: "\u{1F37D}️" },
+  { type: "boucherie", label: "Boucherie", icon: "\u{1F969}" },
 ];
 
 export default function EditEstablishmentPage() {
@@ -93,9 +94,10 @@ export default function EditEstablishmentPage() {
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // Consumption types
-  const [consumptionTypesConfigured, setConsumptionTypesConfigured] = useState(false);
-  const [activeConsumptionTypes, setActiveConsumptionTypes] = useState<Set<ConsumptionType>>(new Set());
+  // Consumption types (tous actifs par défaut)
+  const [activeConsumptionTypes, setActiveConsumptionTypes] = useState<Set<ConsumptionType>>(
+    new Set(ALL_CONSUMPTION_TYPES.map((ct) => ct.type))
+  );
 
   const [form, setForm] = useState({
     title: "",
@@ -146,7 +148,6 @@ export default function EditEstablishmentPage() {
           try {
             const ctRows = await getEstablishmentConsumptionTypes(id);
             if (ctRows.length > 0) {
-              setConsumptionTypesConfigured(true);
               setActiveConsumptionTypes(
                 new Set(ctRows.filter((r) => r.is_active).map((r) => r.consumption_type))
               );
@@ -296,18 +297,13 @@ export default function EditEstablishmentPage() {
       });
 
       // Save consumption types
-      if (consumptionTypesConfigured) {
-        await setEstablishmentConsumptionTypes(
-          id,
-          ALL_CONSUMPTION_TYPES.map((ct) => ({
-            consumption_type: ct.type,
-            is_active: activeConsumptionTypes.has(ct.type),
-          }))
-        );
-      } else {
-        // No config = delete all rows (fallback to "all active")
-        await setEstablishmentConsumptionTypes(id, []);
-      }
+      await setEstablishmentConsumptionTypes(
+        id,
+        ALL_CONSUMPTION_TYPES.map((ct) => ({
+          consumption_type: ct.type,
+          is_active: activeConsumptionTypes.has(ct.type),
+        }))
+      );
 
       toast({ title: "Établissement mis à jour" });
       router.push("/content/establishments");
@@ -608,17 +604,6 @@ export default function EditEstablishmentPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4">
-                  <Link href="/content/establishments">
-                    <Button type="button" variant="outline">
-                      Annuler
-                    </Button>
-                  </Link>
-                  <Button type="submit" disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Enregistrer
-                  </Button>
-                </div>
               </CardContent>
             </Card>
 
@@ -626,59 +611,51 @@ export default function EditEstablishmentPage() {
               <CardHeader>
                 <CardTitle>Types de consommation</CardTitle>
                 <CardDescription>
-                  Activez les types de produits proposés par cet établissement. Si aucun type n'est configuré, tous sont affichés par défaut dans le scanner.
+                  Sélectionnez les types de produits proposés par cet établissement. Seuls les types actifs seront affichés dans le scanner.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Switch
-                    id="configure-consumption-types"
-                    checked={consumptionTypesConfigured}
-                    onCheckedChange={(checked) => {
-                      setConsumptionTypesConfigured(checked);
-                      if (checked && activeConsumptionTypes.size === 0) {
-                        setActiveConsumptionTypes(
-                          new Set(ALL_CONSUMPTION_TYPES.map((ct) => ct.type))
-                        );
-                      }
-                    }}
-                  />
-                  <Label htmlFor="configure-consumption-types">
-                    Configurer les types de consommation
-                  </Label>
-                </div>
-
-                {consumptionTypesConfigured && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {ALL_CONSUMPTION_TYPES.map((ct) => (
-                      <div
-                        key={ct.type}
-                        className="flex items-center justify-between rounded-lg border p-3"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">{ct.icon}</span>
-                          <span className="text-sm font-medium">{ct.label}</span>
-                        </div>
-                        <Switch
-                          checked={activeConsumptionTypes.has(ct.type)}
-                          onCheckedChange={(checked) => {
-                            setActiveConsumptionTypes((prev) => {
-                              const next = new Set(prev);
-                              if (checked) {
-                                next.add(ct.type);
-                              } else {
-                                next.delete(ct.type);
-                              }
-                              return next;
-                            });
-                          }}
-                        />
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {ALL_CONSUMPTION_TYPES.map((ct) => (
+                    <div
+                      key={ct.type}
+                      className="flex items-center justify-between rounded-lg border p-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{ct.icon}</span>
+                        <span className="text-sm font-medium">{ct.label}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <Switch
+                        checked={activeConsumptionTypes.has(ct.type)}
+                        onCheckedChange={(checked) => {
+                          setActiveConsumptionTypes((prev) => {
+                            const next = new Set(prev);
+                            if (checked) {
+                              next.add(ct.type);
+                            } else {
+                              next.delete(ct.type);
+                            }
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
+
+            <div className="mt-6 flex justify-end gap-4">
+              <Link href="/content/establishments">
+                <Button type="button" variant="outline">
+                  Annuler
+                </Button>
+              </Link>
+              <Button type="submit" disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Enregistrer
+              </Button>
+            </div>
           </form>
         </TabsContent>
 

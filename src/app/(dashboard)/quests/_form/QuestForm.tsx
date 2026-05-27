@@ -49,6 +49,7 @@ const CONSUMPTION_TYPES: { value: ConsumptionType; label: string }[] = [
   { value: "soft", label: "Sodas / softs" },
   { value: "boisson_chaude", label: "Boissons chaudes" },
   { value: "restauration", label: "Restauration" },
+  { value: "boucherie", label: "Boucherie" },
 ];
 
 function generateSlug(name: string): string {
@@ -88,6 +89,7 @@ const formSchema = z
       "soft",
       "boisson_chaude",
       "restauration",
+      "boucherie",
     ]),
     targetValue: z.string().min(1, "Objectif requis."),
     periodType: z.enum(["weekly", "monthly", "yearly"]),

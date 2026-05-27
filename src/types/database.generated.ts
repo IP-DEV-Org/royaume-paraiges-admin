@@ -1686,6 +1686,7 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          identity_photo_url: string | null
           is_test: boolean
           last_name: string | null
           phone: string | null
@@ -1707,6 +1708,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          identity_photo_url?: string | null
           is_test?: boolean
           last_name?: string | null
           phone?: string | null
@@ -1728,6 +1730,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          identity_photo_url?: string | null
           is_test?: boolean
           last_name?: string | null
           phone?: string | null
@@ -3216,6 +3219,7 @@ export type Database = {
         | "soft"
         | "boisson_chaude"
         | "restauration"
+        | "boucherie"
       payment_method: "card" | "cash" | "cashback" | "coupon"
       quest_type:
         | "xp_earned"
