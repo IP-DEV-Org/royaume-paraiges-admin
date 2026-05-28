@@ -2098,6 +2098,39 @@ export type Database = {
           },
         ]
       }
+      ranks: {
+        Row: {
+          created_at: string
+          id: number
+          max_level: number
+          min_level: number
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          max_level: number
+          min_level: number
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          max_level?: number
+          min_level?: number
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       receipt_consumption_items: {
         Row: {
           consumption_type: Database["public"]["Enums"]["consumption_type"]

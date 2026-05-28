@@ -74,6 +74,11 @@ export type AdminSetting = Database["public"]["Tables"]["admin_settings"]["Row"]
 export type AdminSettingInsert = Database["public"]["Tables"]["admin_settings"]["Insert"];
 export type AdminSettingUpdate = Database["public"]["Tables"]["admin_settings"]["Update"];
 
+// Ranks (groupes de niveaux éditables depuis /content/storytelling)
+export type Rank = Database["public"]["Tables"]["ranks"]["Row"];
+export type RankInsert = Database["public"]["Tables"]["ranks"]["Insert"];
+export type RankUpdate = Database["public"]["Tables"]["ranks"]["Update"];
+
 // Cashpad reconciliation (migration 032).
 // Le statut est stocké en TEXT côté BDD (CHECK constraint) et la liste de
 // candidats en JSONB — on durcit ici le typage pour l'usage applicatif.

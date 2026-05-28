@@ -1,12 +1,8 @@
 import { createClient } from "@/lib/supabase/client";
-import type { Database } from "@/types/database";
+import type { Database, Rank } from "@/types/database";
 
 export type LevelThreshold = Database["public"]["Tables"]["level_thresholds"]["Row"];
 
-/**
- * Grille des 25 niveaux du Royaume (Écuyer I → Chevalier de la Table Ronde).
- * Triés par niveau ascendant.
- */
 export async function getLevelThresholds(): Promise<LevelThreshold[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -26,13 +22,26 @@ export function levelToCoefficient(level: number): number {
 }
 
 /**
- * Retourne le rang « parent » d'un niveau (Écuyer / Soldat / Sergent / Capitaine / Chevalier / Chevalier de la Table Ronde).
+ * Fallback hardcodé utilisé si la table `ranks` est vide ou indisponible.
+ * Reste aligné sur le seed initial (migration `create_ranks_table`).
  */
 export function levelToRankName(level: number): string {
-  if (level >= 25) return "Chevalier de la Table Ronde";
+  if (level >= 26) return "Chevalier de la Table Ronde";
   if (level >= 21) return "Chevalier";
   if (level >= 16) return "Capitaine";
   if (level >= 11) return "Sergent";
   if (level >= 6) return "Soldat";
   return "Écuyer";
+}
+
+/**
+ * Résolution dynamique du rang d'un niveau à partir de la table `ranks`.
+ * En cas de chevauchement, prend le rang avec le plus petit `sort_order`.
+ * Tombe sur `levelToRankName` si aucun rang ne matche.
+ */
+export function resolveRankName(level: number, ranks: Rank[]): string {
+  const matching = ranks
+    .filter((r) => level >= r.min_level && level <= r.max_level)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  return matching[0]?.name ?? levelToRankName(level);
 }

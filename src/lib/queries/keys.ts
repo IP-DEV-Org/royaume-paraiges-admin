@@ -79,6 +79,12 @@ export const establishmentKeys = {
     [...establishmentKeys.all, "consumptionTypes", id] as const,
 };
 
+export const rankKeys = {
+  all: ["ranks"] as const,
+  lists: () => [...rankKeys.all, "list"] as const,
+  detail: (id: number) => [...rankKeys.all, "detail", id] as const,
+};
+
 export const adminSettingsKeys = {
   all: ["adminSettings"] as const,
   questAlertRatio: () => [...adminSettingsKeys.all, "questAlertRatio"] as const,
