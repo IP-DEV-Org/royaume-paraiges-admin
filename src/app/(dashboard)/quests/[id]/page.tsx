@@ -72,7 +72,7 @@ export default function EditQuestPage() {
           return;
         }
 
-        // amount_spent (déprécié) : convertir centimes → euros pour l'affichage
+        // amount_spent stocké en centimes → afficher en euros.
         // Sinon afficher la valeur brute (PdB / unités).
         const targetValueDisplay =
           quest.quest_type === "amount_spent"

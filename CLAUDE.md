@@ -20,7 +20,7 @@ Next.js 16.1 (App Router) · React 19.2 · TypeScript 5.7 · Supabase 2.47 · Ta
 
 ## Règles produit en vigueur
 
-- **Zéro euro côté client** : l'app Expo ne doit jamais afficher d'euros. Les quêtes monétaires utilisent `quest_type = 'cashback_earned'` (target en PdB, 1 PdB = 1 centime). Le type `amount_spent` est **déprécié** — retiré du formulaire de création mais conservé dans l'enum pour l'édition d'anciennes quêtes. L'admin/scanner/waiters peuvent afficher en €.
+- **Zéro euro côté client** : l'app Expo ne doit jamais afficher d'euros. Les quêtes purement monétaires côté client utilisent `quest_type = 'cashback_earned'` (target en PdB, 1 PdB = 1 centime). Le type `amount_spent` reste disponible à la création (target saisie en €, stockée en centimes via ×100) — l'admin/scanner/waiters peuvent afficher en €, mais si une telle quête est rendue visible côté Expo, prévoir un affichage non-monétaire (libellé descriptif, conversion en PdB attendus, etc.).
 - **Refonte mécaniques de jeu (en prod)** : grille 25 niveaux, `cashback_coefficient = 100 + (level-1)*20` auto-maintenu par trigger sur `gains`, cycle de saison (snapshot → badges → reset) via `/rewards/season`.
 - **Badges succès** : catégorie `achievement` sur `badge_types`, `criterion_type` paramétrable, attribution temps réel via hook dans `create_receipt` (step 12b) + cron nocturne 02:00 UTC pour les streaks. Soft-delete via `archived_at`. Cf. `docs/docs/supabase/functions/achievement_badges.md`.
 
@@ -60,7 +60,7 @@ Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, 
 ### Conversion target_value des quêtes — piège récurrent
 
 Dans `QuestForm.submit` :
-- `amount_spent` (déprécié) : `parseFloat(value) * 100` → centimes
+- `amount_spent` : `parseFloat(value) * 100` → centimes
 - `cashback_earned` : `parseInt(value)` → PdB direct (saisie "50" = `target_value = 50`, **pas 5000**)
 - Autres : `parseInt(value)` → unités directes
 
@@ -91,7 +91,7 @@ Dans `QuestForm.submit` :
 |------|-------|-------|
 | `xp_earned` | XP | |
 | `cashback_earned` | PdB | Progression = SUM(`gains.cashback_money`) sur la période |
-| `amount_spent` | Centimes BDD / € UI | **Déprécié**, conversion ×100 au submit |
+| `amount_spent` | Centimes BDD / € UI | Conversion ×100 au submit |
 | `establishments_visited` | Nombre | |
 | `orders_count` | Nombre | |
 | `quest_completed` | Nb sous-périodes | Méta-quête, incompatible avec `weekly` |
@@ -266,7 +266,7 @@ queryClient.invalidateQueries({ queryKey: questKeys.all });
 ### Conversion target_value des quêtes — piège récurrent
 
 Dans `QuestForm.submit` :
-- `quest_type === "amount_spent"` (déprécié) : `parseFloat(value) * 100` → centimes
+- `quest_type === "amount_spent"` : `parseFloat(value) * 100` → centimes (€ saisis → centimes stockés)
 - `quest_type === "cashback_earned"` : `parseInt(value)` → PdB direct (1 PdB = 1 centime, mais saisi en PdB)
 - Tous les autres : `parseInt(value)` → unités directes
 

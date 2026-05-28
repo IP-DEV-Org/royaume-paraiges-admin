@@ -282,7 +282,7 @@ export function QuestForm({
   };
 
   const submit = handleSubmit(async (values) => {
-    // Conversion target_value : amount_spent (déprécié) en centimes, sinon int direct.
+    // amount_spent : euros saisis → centimes stockés. Autres types : int direct.
     const target =
       values.questType === "amount_spent"
         ? Math.round(parseFloat(values.targetValue) * 100)
@@ -327,7 +327,7 @@ export function QuestForm({
       case "xp_earned":
         return "Quantité d'XP à gagner";
       case "amount_spent":
-        return "Montant en euros (ex: 50 = 50€) — type déprécié";
+        return "Montant en euros à dépenser sur la période (ex: 50 = 50€)";
       case "cashback_earned":
         return "Nombre de Paraiges de Bronze à collecter (ex: 50 = 50 PdB)";
       case "establishments_visited":
@@ -429,11 +429,9 @@ export function QuestForm({
                       <SelectItem value="cashback_earned">
                         Collecter des Paraiges de Bronze
                       </SelectItem>
-                      {mode === "edit" && (
-                        <SelectItem value="amount_spent">
-                          Dépenser de l&apos;argent (déprécié)
-                        </SelectItem>
-                      )}
+                      <SelectItem value="amount_spent">
+                        Dépenser de l&apos;argent
+                      </SelectItem>
                       <SelectItem value="establishments_visited">
                         Visiter des établissements
                       </SelectItem>

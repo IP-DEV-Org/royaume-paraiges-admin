@@ -140,7 +140,7 @@ const periodTypeLabels: Record<PeriodType, string> = {
 
 const questTypeLabels: Record<QuestType, string> = {
   xp_earned: "Gagner de l'XP",
-  amount_spent: "Dépenser de l'argent (déprécié)",
+  amount_spent: "Dépenser de l'argent",
   cashback_earned: "Collecter des Paraiges de Bronze",
   establishments_visited: "Visiter des établissements",
   orders_count: "Passer des commandes",
