@@ -258,6 +258,9 @@ export interface TriggerReconcileResult {
     partial: boolean;
     establishments: number;
     cashpad_tickets_fetched: number;
+    /** Tickets Cashpad réellement encaissés (non annulés, montant > 0) — c'est
+     * le décompte affiché par Cashpad. Sous-ensemble de cashpad_tickets_fetched. */
+    cashpad_tickets_encaisses?: number;
     royaume_receipts: number;
     matched: number;
     orphan_royaume: number;
@@ -332,6 +335,7 @@ export interface ReconcileProgress {
   daysTotal: number;
   currentDate: string | null;
   cashpad_tickets_fetched: number;
+  cashpad_tickets_encaisses: number;
   royaume_receipts: number;
   matched: number;
   orphan_royaume: number;
@@ -354,6 +358,7 @@ export async function triggerReconciliationProgressive(params: {
     daysTotal: days.length,
     currentDate: null,
     cashpad_tickets_fetched: 0,
+    cashpad_tickets_encaisses: 0,
     royaume_receipts: 0,
     matched: 0,
     orphan_royaume: 0,
@@ -381,6 +386,7 @@ export async function triggerReconciliationProgressive(params: {
       });
       const s = result.summary;
       progress.cashpad_tickets_fetched += s.cashpad_tickets_fetched;
+      progress.cashpad_tickets_encaisses += s.cashpad_tickets_encaisses ?? 0;
       progress.royaume_receipts += s.royaume_receipts;
       progress.matched += s.matched;
       progress.orphan_royaume += s.orphan_royaume;
