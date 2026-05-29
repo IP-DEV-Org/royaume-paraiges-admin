@@ -54,6 +54,7 @@ import {
   Award,
   Target,
   Shield,
+  IdCard,
 } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -158,6 +159,7 @@ export default function UserDetailPage() {
     birthdate: string | null;
     username: string | null;
     avatarUrl: string | null;
+    identityPhotoUrl: string | null;
     role: UserRole;
     xpCoefficient: number;
     cashbackCoefficient: number;
@@ -252,6 +254,7 @@ export default function UserDetailPage() {
             birthdate: userData.birthdate,
             username: userData.username,
             avatarUrl: userData.avatar_url,
+            identityPhotoUrl: userData.identity_photo_url,
             role: userData.role,
             xpCoefficient: userData.xp_coefficient || 1,
             cashbackCoefficient: userData.cashback_coefficient || 1,
@@ -664,6 +667,21 @@ export default function UserDetailPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Membre depuis</p>
                     <p className="font-medium">{formatDate(user.createdAt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <IdCard className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Photo d&apos;identification</p>
+                    {user.identityPhotoUrl ? (
+                      <img
+                        src={user.identityPhotoUrl}
+                        alt="Photo d'identification"
+                        className="mt-2 h-32 w-32 rounded-lg object-cover border"
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">Non fournie</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -1522,6 +1540,7 @@ export default function UserDetailPage() {
                               birthdate: refreshed.birthdate,
                               username: refreshed.username,
                               avatarUrl: refreshed.avatar_url,
+                              identityPhotoUrl: refreshed.identity_photo_url,
                               role: refreshed.role,
                               xpCoefficient: refreshed.xp_coefficient || 1,
                               cashbackCoefficient: refreshed.cashback_coefficient || 1,
