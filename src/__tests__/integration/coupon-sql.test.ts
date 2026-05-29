@@ -7,7 +7,7 @@
  * Ils ne sont PAS executes par Vitest. Ils servent de reference
  * pour valider le bon fonctionnement des fonctions PostgreSQL.
  *
- * Projet Supabase: uflgfsoekkgegdgecubb
+ * Projet Supabase: kioysoveqemzjolfwpnu
  */
 
 // ============================================================

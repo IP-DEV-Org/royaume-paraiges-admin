@@ -66,7 +66,7 @@ L'application sera disponible sur [http://localhost:3000](http://localhost:3000)
 Creez un fichier `.env.local` :
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://uflgfsoekkgegdgecubb.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://kioysoveqemzjolfwpnu.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=votre_cle_anon
 ```
 
