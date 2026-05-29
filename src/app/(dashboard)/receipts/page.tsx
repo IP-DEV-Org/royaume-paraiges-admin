@@ -287,10 +287,10 @@ function ReceiptDetailsDialog({
                                 {p.category ?? "—"}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">
-                                {formatCurrency(p.price_cents)}
+                                {formatCurrency(p.qty > 0 ? p.price_cents / p.qty : p.price_cents)}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">
-                                {formatCurrency(p.price_cents * p.qty)}
+                                {formatCurrency(p.price_cents)}
                               </TableCell>
                             </TableRow>
                           ))}

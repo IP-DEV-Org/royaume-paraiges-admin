@@ -455,10 +455,10 @@ function ReconciliationDetailsDialog({
                           {p.category ?? "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatEuro(p.price_cents)}
+                          {formatEuro(p.qty > 0 ? p.price_cents / p.qty : p.price_cents)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatEuro(p.price_cents * p.qty)}
+                          {formatEuro(p.price_cents)}
                         </TableCell>
                       </TableRow>
                     ))}
