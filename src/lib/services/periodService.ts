@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { getPeriodIdentifier } from "@/lib/utils";
 import type { AvailablePeriod, PeriodType } from "@/types/database";
 
 // Récupérer toutes les périodes disponibles
@@ -74,23 +75,12 @@ export async function getAvailablePeriod(
   return data as AvailablePeriod | null;
 }
 
-// Récupérer la période courante
+// Récupérer la période courante.
+// Délègue à l'unique générateur de labels `getPeriodIdentifier` (src/lib/utils),
+// qui suit la convention ISO 8601 alignée sur la SQL get_period_identifier.
+// Ne PAS réintroduire de calcul de semaine local ailleurs dans l'admin.
 export function getCurrentPeriodIdentifier(periodType: PeriodType): string {
-  const now = new Date();
-  const year = now.getFullYear();
-
-  switch (periodType) {
-    case "weekly": {
-      const firstDayOfYear = new Date(year, 0, 1);
-      const pastDaysOfYear = (now.getTime() - firstDayOfYear.getTime()) / 86400000;
-      const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-      return `${year}-W${weekNumber.toString().padStart(2, "0")}`;
-    }
-    case "monthly":
-      return `${year}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
-    case "yearly":
-      return `${year}`;
-  }
+  return getPeriodIdentifier(periodType);
 }
 
 // Récupérer les années disponibles

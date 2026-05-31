@@ -23,26 +23,9 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createPeriodConfig } from "@/lib/services/rewardService";
+import { getCurrentPeriodIdentifier } from "@/lib/services/periodService";
 import { useToast } from "@/components/ui/use-toast";
 import type { PeriodType } from "@/types/database";
-
-function getCurrentPeriodIdentifier(periodType: PeriodType): string {
-  const now = new Date();
-  const year = now.getFullYear();
-
-  switch (periodType) {
-    case "weekly": {
-      const firstDayOfYear = new Date(year, 0, 1);
-      const pastDaysOfYear = (now.getTime() - firstDayOfYear.getTime()) / 86400000;
-      const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-      return `${year}-W${weekNumber.toString().padStart(2, "0")}`;
-    }
-    case "monthly":
-      return `${year}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
-    case "yearly":
-      return `${year}`;
-  }
-}
 
 export default function CreatePeriodPage() {
   const router = useRouter();
