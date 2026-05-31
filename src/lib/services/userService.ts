@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { getPeriodIdentifier } from "@/lib/utils";
 import { Profile, ProfileUpdate, UserRole, Coupon, Receipt, ReceiptLine, ReceiptConsumptionItem } from "@/types/database";
 
 export interface UserFilters {
@@ -508,6 +509,46 @@ export async function getUserQuestProgress(
 ): Promise<{ data: UserQuestProgress[]; count: number }> {
   const supabase = createClient();
 
+  // On ne montre que les quêtes réellement actives sur la période en cours :
+  // is_active = true ET (aucune période planifiée → quête permanente, OU période
+  // courante présente dans quest_periods). Une quête active mais hors rotation
+  // cette période (ou désactivée avec des quest_progress résiduels) ne doit pas
+  // apparaître comme « En cours » dans ce tableau.
+  const currentByType: Record<string, string> = {
+    weekly: getPeriodIdentifier("weekly"),
+    monthly: getPeriodIdentifier("monthly"),
+    yearly: getPeriodIdentifier("yearly"),
+  };
+
+  const { data: activeQuestsRaw, error: activeQuestsError } = await supabase
+    .from("quests")
+    .select("id, period_type, quest_periods(period_identifier)")
+    .eq("is_active", true);
+
+  if (activeQuestsError) {
+    console.error("Error fetching active quests:", activeQuestsError);
+    throw activeQuestsError;
+  }
+
+  const activeQuests = (activeQuestsRaw || []) as Array<{
+    id: number;
+    period_type: string | null;
+    quest_periods: { period_identifier: string }[] | null;
+  }>;
+
+  const activeQuestIds = activeQuests
+    .filter((q) => {
+      const periods = q.quest_periods || [];
+      if (periods.length === 0) return true; // quête permanente : active chaque période
+      const current = q.period_type ? currentByType[q.period_type] : undefined;
+      return !!current && periods.some((p) => p.period_identifier === current);
+    })
+    .map((q) => q.id);
+
+  if (activeQuestIds.length === 0) {
+    return { data: [], count: 0 };
+  }
+
   let query = supabase
     .from("quest_progress")
     .select(
@@ -520,6 +561,8 @@ export async function getUserQuestProgress(
       { count: "exact" }
     )
     .eq("customer_id", userId)
+    .in("quest_id", activeQuestIds)
+    .in("period_identifier", Object.values(currentByType))
     .order("updated_at", { ascending: false });
 
   if (periodTypeFilter && periodTypeFilter !== "all") {
