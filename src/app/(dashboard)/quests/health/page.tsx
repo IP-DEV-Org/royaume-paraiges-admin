@@ -39,7 +39,12 @@ import {
   getAvgTicket12m,
   type QuestReferencePrices,
 } from "@/lib/services/adminSettingsService";
-import type { QuestWithRelations, ConsumptionType } from "@/types/database";
+import { getCurrentPeriodIdentifier } from "@/lib/services/periodService";
+import type {
+  QuestWithRelations,
+  ConsumptionType,
+  PeriodType,
+} from "@/types/database";
 
 type RatioStatus = "alert" | "ok" | "excluded" | "missing_ref";
 
@@ -213,6 +218,39 @@ export default function QuestHealthPage() {
     });
   }, [quests, prices, avgTicket.cents, establishmentMap, ratioPct]);
 
+  // Cohérence du planning : une quête active ne récompense que si la période
+  // courante figure dans ses quest_periods (garde moteur). On flague ici les
+  // deux configurations à risque qui passeraient inaperçues autrement.
+  const planningAlerts = useMemo(() => {
+    const out: {
+      quest: QuestWithRelations;
+      kind: "permanent" | "stale";
+      detail: string;
+    }[] = [];
+    for (const quest of quests) {
+      const periods = (quest.quest_periods ?? []).map((p) => p.period_identifier);
+      const current = getCurrentPeriodIdentifier(quest.period_type as PeriodType);
+      if (periods.length === 0) {
+        out.push({
+          quest,
+          kind: "permanent",
+          detail:
+            "Aucune période planifiée — récompense à chaque période, en continu.",
+        });
+        continue;
+      }
+      const latest = [...periods].sort().reverse()[0];
+      if (latest < current) {
+        out.push({
+          quest,
+          kind: "stale",
+          detail: `Dernière période planifiée ${latest} < période courante ${current} — ne récompensera plus.`,
+        });
+      }
+    }
+    return out;
+  }, [quests]);
+
   const alertCount = rows.filter((r) => r.status === "alert").length;
   const okCount = rows.filter((r) => r.status === "ok").length;
   const excludedCount = rows.filter((r) => r.status === "excluded").length;
@@ -249,6 +287,50 @@ export default function QuestHealthPage() {
           </Link>
         </Button>
       </div>
+
+      {planningAlerts.length > 0 && (
+        <Card className="border-red-200 dark:border-red-900">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              Quêtes actives & planning ({planningAlerts.length})
+            </CardTitle>
+            <CardDescription>
+              Le moteur ne récompense une quête que si la période courante figure
+              dans son planning. Ces quêtes actives sont dans une configuration à
+              risque.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {planningAlerts.map(({ quest, kind, detail }) => (
+              <Link
+                key={quest.id}
+                href={`/quests/${quest.id}`}
+                className="flex items-start justify-between gap-3 rounded-md border p-3 hover:bg-muted/50"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{quest.name}</p>
+                  <p className="text-xs text-muted-foreground">{detail}</p>
+                </div>
+                {kind === "permanent" ? (
+                  <Badge
+                    variant="secondary"
+                    className="shrink-0 gap-1 bg-amber-100 text-amber-800"
+                  >
+                    <Globe className="h-3 w-3" />
+                    Permanente
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="shrink-0 gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Planning périmé
+                  </Badge>
+                )}
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
         <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">

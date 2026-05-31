@@ -448,7 +448,19 @@ export default function QuestsPage() {
             className={cn("h-5 w-5", dim ? "text-muted-foreground" : "text-primary")}
           />
           <div>
-            <p className="font-medium">{quest.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-medium">{quest.name}</p>
+              {dim && quest.is_active && (
+                <Badge
+                  variant="secondary"
+                  className="gap-1 bg-red-100 text-red-800 text-xs"
+                  title="Cette quête est classée en archives mais reste active. Tant qu'elle est active sans période planifiée, elle peut continuer à récompenser. Désactivez-la si elle ne doit plus tourner."
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  Encore active
+                </Badge>
+              )}
+            </div>
             {quest.description && (
               <p className="text-sm text-muted-foreground line-clamp-1">
                 {quest.description}
@@ -548,6 +560,7 @@ export default function QuestsPage() {
           <TableHead>Objectif</TableHead>
           <TableHead>Récompenses</TableHead>
           <TableHead>Participation</TableHead>
+          <TableHead>Active</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -591,6 +604,18 @@ export default function QuestsPage() {
                       </span>
                     </div>
                   )}
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Switch
+                    checked={quest.is_active}
+                    disabled={toggleActiveMutation.isPending}
+                    onCheckedChange={(checked) =>
+                      toggleActiveMutation.mutate({
+                        id: quest.id,
+                        isActive: checked,
+                      })
+                    }
+                  />
                 </TableCell>
               </TableRow>
             );
