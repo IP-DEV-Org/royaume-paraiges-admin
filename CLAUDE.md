@@ -76,6 +76,7 @@ Dans `QuestForm.submit` :
 - **Soft-delete des badges achievement** : la FK `user_badges.badge_id` est `ON DELETE CASCADE`, un hard-delete effacerait tous les badges déjà obtenus → toujours passer par `archived_at`.
 - **Reset de saison** n'efface jamais : ni le solde PdB (`gains` intact), ni les badges (`user_badges`), ni les snapshots. Seul `cashback_coefficient` revient à 100.
 - **`profiles.cashback_coefficient` est auto-maintenu** par trigger sur `gains` — ne JAMAIS le modifier manuellement (sauf via RPC `reset_season`).
+- **Solde PdB ne peut plus passer négatif** (migration 043) : trigger `trg_enforce_non_negative_cashback` sur `gains` (AFTER INSERT/UPDATE/DELETE). Toute mutation de `gains` rendant `SUM(cashback_money) − dépenses_cashback < 0` pour un client est rejetée (`SQLSTATE P0423`, message `CASHBACK_BALANCE_NEGATIVE:`). En pratique : une annulation (gain négatif `rollback_beta_correction`) ne peut plus dépasser le solde disponible. Ne couvre pas le chemin de dépense (`receipt_lines`/`create_receipt`). Cf. `docs/docs/supabase/functions/enforce_non_negative_cashback.md`.
 - `level_thresholds` : 25 lignes (Écuyer I → Chevalier de la Table Ronde), à lire dynamiquement, jamais hardcoder.
 - 17 quêtes désactivées (ids 10-26 sauf 27-28) — préservées pour l'historique de `quest_progress` / `quest_completion_logs`. **Ne pas DELETE**.
 - 6 quêtes consumption hebdo créées mais désactivées par défaut (à activer une à une selon calendrier produit).
@@ -305,6 +306,7 @@ Si tu modifies cette logique, **vérifie cashback_earned** : la saisie "50" doit
 - **Badges catégorie `quest`** : 3 templates créés (`quest_pelerin`, `quest_grand_pelerin`, `quest_fidele_legendary`). `quest_grand_pelerin` (3 mois consécutifs) doit être attribué manuellement pour l'instant.
 - **17 quêtes désactivées en BDD** (ids 10-26 sauf 27-28) — préservées pour l'historique de `quest_progress` / `quest_completion_logs`. Ne pas DELETE.
 - **Helpers TypeScript** : `Quest`, `QuestInsert`, `QuestUpdate`, `QuestType`, `ConsumptionType`, `QuestWithRelations`, etc. exposés depuis `@/types/database` (ajoutés manuellement en bas du fichier en avril 2026).
+- **Planning `quest_periods` appliqué par le moteur (mai 2026, migration `041`)** : `update_quest_progress_for_receipt` honore désormais `quest_periods` (comme `update_meta_quest_progress`). Quête **sans** période = permanente (récompense chaque période active) ; quête **avec** périodes = récompense **uniquement** si la période courante y figure (rotation). Avant le fix, le moteur ignorait le planning → crédits PdB hors rotation + quêtes défuntes restées actives qui continuaient de payer (incident quête 9 « Dix coupes en sept jours », reprise via gains `rollback_beta_correction`). `/quests/health` alerte sur les quêtes actives **permanentes** (aucune période) ou à **planning périmé** (aucune période ≥ courante) ; l'onglet **Archives** de `/quests` badge en rouge une quête archivée encore `is_active`. ⚠️ Vérifier que l'app **front** respecte aussi `quest_periods` à l'affichage.
 
 ### Refonte mécaniques de jeu (avril 2026) — règles à connaître
 
