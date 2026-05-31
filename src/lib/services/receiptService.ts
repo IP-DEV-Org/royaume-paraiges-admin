@@ -6,6 +6,7 @@ import {
   CashpadReceiptSnapshot,
   ReconciliationStatus,
 } from "@/types/database";
+import { deleteReceiptSchema } from "@/lib/schemas/receipt.schema";
 
 export interface ReceiptFilters {
   customerId?: string;
@@ -138,6 +139,32 @@ export async function getReceipt(
     ...(receipt as ReceiptWithDetails),
     lines: (lines || []) as ReceiptLine[],
   };
+}
+
+/**
+ * Supprime un ticket et toute sa cascade (receipt_lines, gains,
+ * receipt_consumption_items, spendings, cashpad_reconciliations) via la RPC
+ * `admin_delete_receipt` (atomique + ordre maîtrisé pour ne pas déclencher le
+ * faux positif du garde-fou solde négatif). Cf. migration 044.
+ *
+ * Lève une erreur :
+ * - `P0423` (CASHBACK_BALANCE_NEGATIVE) si les PdB gagnés sur ce ticket ont
+ *   déjà été dépensés ailleurs → suppression refusée pour ne pas corrompre le solde ;
+ * - `P0002` si le ticket est introuvable ;
+ * - `42501` si l'appelant n'est pas admin.
+ */
+export async function deleteReceipt(receiptId: number): Promise<void> {
+  const { receiptId: id } = deleteReceiptSchema.parse({ receiptId });
+
+  const supabase = createClient();
+  const { error } = await (supabase.rpc as any)("admin_delete_receipt", {
+    p_receipt_id: id,
+  });
+
+  if (error) {
+    console.error("Error deleting receipt:", error);
+    throw error;
+  }
 }
 
 export async function getReceiptStats(): Promise<{

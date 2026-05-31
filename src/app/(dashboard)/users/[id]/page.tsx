@@ -55,6 +55,7 @@ import {
   Target,
   Shield,
   IdCard,
+  Trash2,
 } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -81,6 +82,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { getEstablishments, type Establishment } from "@/lib/services/contentService";
+import { deleteReceipt } from "@/lib/services/receiptService";
 import { anonymizeUser } from "@/lib/services/gdprService";
 import {
   AlertDialog,
@@ -196,6 +198,7 @@ export default function UserDetailPage() {
   const [receipts, setReceipts] = useState<UserReceipt[]>([]);
   const [receiptsTotal, setReceiptsTotal] = useState(0);
   const [receiptsPage, setReceiptsPage] = useState(0);
+  const [deletingReceiptId, setDeletingReceiptId] = useState<number | null>(null);
   const [loadingReceipts, setLoadingReceipts] = useState(false);
 
   // Gains
@@ -395,6 +398,56 @@ export default function UserDetailPage() {
       setLoadingReceipts(false);
     }
   }, [userId, receiptsPage, toast]);
+
+  // Rafraîchit les cartes de stats de l'en-tête (solde, nb tickets, dépensé)
+  // après une mutation. La RPC de suppression rafraîchit déjà la matview
+  // `user_stats` côté BDD, donc ce re-fetch renvoie des valeurs à jour.
+  const refreshUserStats = useCallback(async () => {
+    const userData = await getUserWithStats(userId);
+    if (userData) {
+      setStats({
+        totalReceipts: userData.totalReceipts || 0,
+        totalSpent: userData.totalSpent || 0,
+        totalCoupons: userData.totalCoupons || 0,
+        activeCoupons: userData.activeCoupons || 0,
+      });
+    }
+  }, [userId]);
+
+  const handleDeleteReceipt = useCallback(
+    async (receiptId: number) => {
+      setDeletingReceiptId(receiptId);
+      try {
+        await deleteReceipt(receiptId);
+        toast({
+          title: "Ticket supprimé",
+          description: `Le ticket #${receiptId} et toutes ses données associées (gains, lignes de paiement, consommations, réconciliation) ont été supprimés.`,
+        });
+        // Si on supprime le dernier élément d'une page, recule d'une page.
+        if (receipts.length === 1 && receiptsPage > 0) {
+          setReceiptsPage((p) => p - 1);
+        } else {
+          await fetchReceipts();
+        }
+        await refreshUserStats();
+      } catch (error: unknown) {
+        const err = error as { code?: string; message?: string };
+        const isNegativeBalance =
+          err?.code === "P0423" ||
+          (err?.message?.includes("CASHBACK_BALANCE_NEGATIVE") ?? false);
+        toast({
+          variant: "destructive",
+          title: "Suppression impossible",
+          description: isNegativeBalance
+            ? "Les Paraiges de Bronze gagnés sur ce ticket ont déjà été dépensés ailleurs : le supprimer rendrait le solde du client négatif."
+            : "Impossible de supprimer ce ticket. Réessayez ou consultez les logs.",
+        });
+      } finally {
+        setDeletingReceiptId(null);
+      }
+    },
+    [receipts.length, receiptsPage, fetchReceipts, refreshUserStats, toast]
+  );
 
   // Load coupons when tab is selected
   useEffect(() => {
@@ -1281,6 +1334,7 @@ export default function UserDetailPage() {
                         <TableHead>Paiement</TableHead>
                         <TableHead>Consommations</TableHead>
                         <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1346,6 +1400,51 @@ export default function UserDetailPage() {
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {formatDateTime(receipt.created_at)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  disabled={deletingReceiptId === receipt.id}
+                                  aria-label={`Supprimer le ticket #${receipt.id}`}
+                                >
+                                  {deletingReceiptId === receipt.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Supprimer le ticket #{receipt.id} ?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Cette action est <strong>irréversible</strong>.
+                                    Le ticket et toutes ses données liées seront
+                                    définitivement supprimés :
+                                    lignes de paiement, gains (XP et Paraiges de
+                                    Bronze), consommations, dépenses, et
+                                    réconciliation Cashpad éventuelle. Le solde de
+                                    PdB et le niveau du client seront recalculés en
+                                    conséquence.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteReceipt(receipt.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Supprimer définitivement
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </TableCell>
                         </TableRow>
                         );
