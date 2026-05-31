@@ -240,7 +240,7 @@ export default function QuestHealthPage() {
         continue;
       }
       const latest = [...periods].sort().reverse()[0];
-      if (latest < current) {
+      if (latest && latest < current) {
         out.push({
           quest,
           kind: "stale",
