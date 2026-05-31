@@ -815,6 +815,47 @@ export async function getQuestProgressStatsByQuests(
   return statsMap;
 }
 
+// Stats de participation scopées à une période précise (quest_progress.period_identifier).
+// Utilisé par /quests pour afficher la performance d'une quête sur une période passée.
+export async function getQuestProgressStatsForPeriod(
+  questIds: number[],
+  periodIdentifier: string
+): Promise<Map<number, QuestProgressStats>> {
+  if (questIds.length === 0) return new Map();
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("quest_progress")
+    .select("quest_id, status")
+    .in("quest_id", questIds)
+    .eq("period_identifier", periodIdentifier);
+
+  if (error) throw error;
+
+  const statsMap = new Map<number, QuestProgressStats>();
+  for (const questId of questIds) {
+    statsMap.set(questId, {
+      quest_id: questId,
+      in_progress: 0,
+      completed: 0,
+      rewarded: 0,
+      expired: 0,
+      total: 0,
+    });
+  }
+
+  for (const row of (data || []) as { quest_id: number; status: string }[]) {
+    const stats = statsMap.get(row.quest_id);
+    if (stats && row.status in stats) {
+      const statsRecord = stats as unknown as Record<string, number>;
+      statsRecord[row.status] = (statsRecord[row.status] ?? 0) + 1;
+      stats.total++;
+    }
+  }
+
+  return statsMap;
+}
+
 // Récupérer les quêtes actives pour une période spécifique
 export async function getQuestsForPeriod(
   periodType: PeriodType,

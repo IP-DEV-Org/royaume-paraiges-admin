@@ -45,7 +45,7 @@ Forms migrés : `coupons/create`, `rewards/achievements/_form/AchievementBadgeFo
 
 **`/content/beers`** et **`/content/establishments`** : simplifiés (mai 2026). Cartes stats "Source: Supabase" supprimées (purement noise), `IBU moyen` retirée. Migration TanStack Query + sonner. Pages volontairement légères (lecture seule) : recherche + table + dialog réciproque (bières ↔ établissements).
 
-**`/quests`** : simplifié (mai 2026). Toggles `showUpcoming`/`showArchives` remplacés par des pills mutually-exclusive *Actuelles / À venir / Archives*. Boutons CSV (template / export / import) regroupés dans un dropdown **Outils**. Migration TanStack Query + sonner au passage. Le dialog d'import et le `QuestConflictDialog` restent gérés dans la page.
+**`/quests`** : refonte en vue calendaire « En ce moment » (mai 2026). Plus d'onglets type-période ni de pills Actuelles/À venir/Archives. Layout : **3 colonnes** Semaine / Mois / Année affichées simultanément, chacune avec sa **frise temporelle cliquable** (périodes issues de `quest_periods` ∪ période courante, triées ; bouton *Aujourd'hui* pour revenir au présent). Une période sélectionnée passée affiche la **participation** (`getQuestProgressStatsForPeriod`, scopée `quest_progress.period_identifier`) ; présente/future affiche le toggle actif + duplication. Les quêtes **sans planning** (`quest_periods` vide) sont sorties dans une **section « Permanentes »** dédiée (groupée par type), badgées *En continu* si actives. Filtre **Inactives** (caché par défaut) dans le header. Cartes compactes cliquables → détail. Outils CSV (template / export / import) toujours dans le dropdown **Outils** ; dialog d'import et `QuestConflictDialog` toujours gérés dans la page. TanStack Query + sonner.
 
 **`/coupons/create`** : formulaire simplifié (mai 2026). Plus de notion de "mode template / custom" — toujours saisie directe : radios *Bonus cashback (€) / Coupon (%)* puis un seul champ. Les `coupon_templates` restent en BDD et continuent d'alimenter la distribution leaderboard (`/rewards/distribute`) ainsi que `/templates`, mais ne sont plus exposés dans le flux de création manuelle d'un coupon.
 
@@ -80,6 +80,7 @@ Dans `QuestForm.submit` :
 - `level_thresholds` : 25 lignes (Écuyer I → Chevalier de la Table Ronde), à lire dynamiquement, jamais hardcoder.
 - 17 quêtes désactivées (ids 10-26 sauf 27-28) — préservées pour l'historique de `quest_progress` / `quest_completion_logs`. **Ne pas DELETE**.
 - 6 quêtes consumption hebdo créées mais désactivées par défaut (à activer une à une selon calendrier produit).
+- **Convention semaine = ISO 8601 partout (lundi→dimanche)**. SQL : `get_period_identifier` (`IYYY-"W"IW`), `get_period_bounds`, et la table `available_periods` (réalignée migration `042` — elle était en dimanche→samedi, ce qui expirait les quêtes un jour trop tôt chaque dimanche, cf. `docs/.../tables/available_periods.md`). TS : **un seul** générateur de labels, `getPeriodIdentifier(periodType, date?)` dans `src/lib/utils.ts` (ISO) ; `periodService.getCurrentPeriodIdentifier` y délègue. Ne JAMAIS réintroduire un calcul de semaine local (`Math.ceil((days + getDay()+1)/7)` = dimanche→samedi, source de bugs de bord de semaine sur `quest_periods` / `period_reward_configs`).
 
 ## Typage Supabase
 

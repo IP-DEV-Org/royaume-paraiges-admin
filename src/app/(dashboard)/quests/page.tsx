@@ -12,13 +12,13 @@ import { toast } from "sonner";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -27,7 +27,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +59,8 @@ import {
   Copy,
   Wrench,
   ChevronDown,
+  CalendarClock,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 import {
   getQuests,
@@ -69,7 +70,7 @@ import {
   exportQuestsToCsv,
   parseQuestsCsv,
   importQuestsFromCsv,
-  getQuestProgressStatsByQuests,
+  getQuestProgressStatsForPeriod,
   type QuestCsvRow,
   type QuestProgressStats,
 } from "@/lib/services/questService";
@@ -79,58 +80,27 @@ import {
 } from "@/lib/supabase/errorParser";
 import { QuestConflictDialog } from "@/components/quest-conflict-dialog";
 import { questKeys } from "@/lib/queries/keys";
-import { cn, formatCurrency, formatPercentage } from "@/lib/utils";
+import {
+  getCurrentPeriodIdentifier,
+  formatPeriodLabel,
+} from "@/lib/services/periodService";
+import {
+  cn,
+  formatCurrency,
+  formatPercentage,
+  getPeriodIdentifier,
+} from "@/lib/utils";
 import type {
   QuestWithRelations,
   PeriodType,
   QuestType,
 } from "@/types/database";
 
-function getCurrentPeriodIdentifier(periodType: PeriodType): string {
-  const now = new Date();
-  const year = now.getFullYear();
-
-  switch (periodType) {
-    case "weekly": {
-      const firstDayOfYear = new Date(year, 0, 1);
-      const pastDaysOfYear =
-        (now.getTime() - firstDayOfYear.getTime()) / 86400000;
-      const weekNumber = Math.ceil(
-        (pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7,
-      );
-      return `${year}-W${weekNumber.toString().padStart(2, "0")}`;
-    }
-    case "monthly":
-      return `${year}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
-    case "yearly":
-      return `${year}`;
-  }
-}
-
-function isQuestForPeriod(
-  quest: QuestWithRelations,
-  periodId: string,
-): boolean {
-  const periods = quest.quest_periods || [];
-  if (periods.length === 0) return true;
-  return periods.some((p) => p.period_identifier === periodId);
-}
-
-function getLatestPeriod(quest: QuestWithRelations): string {
-  const periods = quest.quest_periods || [];
-  if (periods.length === 0) return "";
-  return [...periods].map((p) => p.period_identifier).sort().reverse()[0] ?? "";
-}
-
-function getEarliestFuturePeriod(
-  quest: QuestWithRelations,
-  currentPeriodId: string,
-): string {
-  const periods = (quest.quest_periods || [])
-    .map((p) => p.period_identifier)
-    .filter((p) => p > currentPeriodId);
-  return periods.sort()[0] || getLatestPeriod(quest);
-}
+const PERIOD_TYPES: { type: PeriodType; label: string }[] = [
+  { type: "weekly", label: "Semaine" },
+  { type: "monthly", label: "Mois" },
+  { type: "yearly", label: "Année" },
+];
 
 const periodTypeLabels: Record<PeriodType, string> = {
   weekly: "Semaine",
@@ -158,13 +128,81 @@ const questTypeIcons: Record<QuestType, typeof Target> = {
   consumption_count: Beer,
 };
 
-type ViewMode = "current" | "upcoming" | "archives";
+const MONTHS_SHORT = [
+  "Jan", "Fév", "Mar", "Avr", "Mai", "Juin",
+  "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc",
+];
 
-const viewModeLabels: Record<ViewMode, string> = {
-  current: "Actuelles",
-  upcoming: "À venir",
-  archives: "Archives",
-};
+/** Libellé court d'une période pour la frise (ex. "S22", "Mai", "2026"). */
+function shortPeriodLabel(type: PeriodType, id: string): string {
+  if (type === "weekly") {
+    const m = id.match(/W(\d{2})$/);
+    return m && m[1] ? `S${parseInt(m[1])}` : id;
+  }
+  if (type === "monthly") {
+    const m = id.match(/-(\d{2})$/);
+    return m && m[1] ? MONTHS_SHORT[parseInt(m[1]) - 1] ?? id : id;
+  }
+  return id;
+}
+
+/** Jeudi (milieu ISO) de la semaine "YYYY-Www" — détermine sans ambiguïté son mois/année. */
+function isoWeekThursday(id: string): Date | null {
+  const m = id.match(/^(\d{4})-W(\d{2})$/);
+  if (!m || !m[1] || !m[2]) return null;
+  const isoYear = parseInt(m[1]);
+  const week = parseInt(m[2]);
+  const jan4 = new Date(isoYear, 0, 4); // le 4 janvier ∈ semaine ISO 1
+  const jan4Day = (jan4.getDay() + 6) % 7; // lundi=0 … dimanche=6
+  const week1Monday = new Date(isoYear, 0, 4 - jan4Day);
+  const thursday = new Date(week1Monday);
+  thursday.setDate(week1Monday.getDate() + (week - 1) * 7 + 3);
+  return thursday;
+}
+
+/**
+ * Convertit la période cliquée en date pivot (anchor). Les 3 frises (semaine /
+ * mois / année) dérivent toutes de cet anchor → elles restent toujours alignées.
+ * On préserve la sélection plus fine quand elle reste cohérente (changer d'année
+ * garde le mois, changer de mois garde la semaine si elle y tombe déjà).
+ */
+function periodToAnchor(type: PeriodType, id: string, prev: Date): Date {
+  if (type === "weekly") {
+    return isoWeekThursday(id) ?? prev;
+  }
+  if (type === "monthly") {
+    const m = id.match(/^(\d{4})-(\d{2})$/);
+    if (!m || !m[1] || !m[2]) return prev;
+    const year = parseInt(m[1]);
+    const month = parseInt(m[2]) - 1;
+    if (prev.getFullYear() === year && prev.getMonth() === month) return prev;
+    return new Date(year, month, 15); // mi-mois : semaine non ambiguë
+  }
+  // yearly
+  const year = parseInt(id);
+  if (isNaN(year)) return prev;
+  if (prev.getFullYear() === year) return prev;
+  return new Date(year, prev.getMonth(), Math.min(prev.getDate(), 28));
+}
+
+function objectiveUnit(quest: QuestWithRelations): string {
+  switch (quest.quest_type) {
+    case "xp_earned":
+      return "XP";
+    case "cashback_earned":
+      return "PdB";
+    case "establishments_visited":
+      return "établissements";
+    case "orders_count":
+      return "commandes";
+    case "quest_completed":
+      return "sous-périodes";
+    case "consumption_count":
+      return quest.consumption_type ?? "produits";
+    default:
+      return "";
+  }
+}
 
 function downloadCsv(content: string, filename: string) {
   const BOM = "﻿";
@@ -183,8 +221,23 @@ export default function QuestsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("weekly");
-  const [viewMode, setViewMode] = useState<ViewMode>("current");
+  const [currentIds] = useState<Record<PeriodType, string>>(() => ({
+    weekly: getCurrentPeriodIdentifier("weekly"),
+    monthly: getCurrentPeriodIdentifier("monthly"),
+    yearly: getCurrentPeriodIdentifier("yearly"),
+  }));
+  // Date pivot unique : les 3 périodes affichées en dérivent (toujours alignées).
+  const [anchor, setAnchor] = useState<Date>(() => new Date());
+  const selectedPeriods = useMemo<Record<PeriodType, string>>(
+    () => ({
+      weekly: getPeriodIdentifier("weekly", anchor),
+      monthly: getPeriodIdentifier("monthly", anchor),
+      yearly: getPeriodIdentifier("yearly", anchor),
+    }),
+    [anchor],
+  );
+
+  const [showInactive, setShowInactive] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importPreview, setImportPreview] = useState<QuestCsvRow[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -206,81 +259,103 @@ export default function QuestsPage() {
     console.error(error);
   }
 
-  const currentPeriodId = getCurrentPeriodIdentifier(selectedPeriod);
+  // Filtre actives/inactives appliqué en amont de tous les regroupements.
+  const visibleQuests = useMemo(
+    () => (showInactive ? quests : quests.filter((q) => q.is_active)),
+    [quests, showInactive],
+  );
 
-  const { currentQuests, upcomingByPeriod, archivesByPeriod } = useMemo(() => {
-    const forType = quests.filter((q) => q.period_type === selectedPeriod);
-    const current = forType.filter((q) =>
-      isQuestForPeriod(q, currentPeriodId),
-    );
-    const nonCurrent = forType.filter(
-      (q) => !isQuestForPeriod(q, currentPeriodId),
-    );
+  const { permanentByType, friseByType, scheduledByType } = useMemo(() => {
+    const permanent: Record<PeriodType, QuestWithRelations[]> = {
+      weekly: [],
+      monthly: [],
+      yearly: [],
+    };
+    const friseSets: Record<PeriodType, Set<string>> = {
+      weekly: new Set([currentIds.weekly, selectedPeriods.weekly]),
+      monthly: new Set([currentIds.monthly, selectedPeriods.monthly]),
+      yearly: new Set([currentIds.yearly, selectedPeriods.yearly]),
+    };
+    const scheduled: Record<PeriodType, QuestWithRelations[]> = {
+      weekly: [],
+      monthly: [],
+      yearly: [],
+    };
 
-    const upcoming = nonCurrent.filter(
-      (q) => getLatestPeriod(q) > currentPeriodId,
-    );
-    const archived = nonCurrent.filter(
-      (q) => getLatestPeriod(q) <= currentPeriodId,
-    );
-
-    const upcomingMap = new Map<string, QuestWithRelations[]>();
-    for (const quest of upcoming) {
-      const key = getEarliestFuturePeriod(quest, currentPeriodId);
-      if (!upcomingMap.has(key)) upcomingMap.set(key, []);
-      upcomingMap.get(key)!.push(quest);
+    for (const quest of visibleQuests) {
+      const type = quest.period_type as PeriodType;
+      if (!(type in permanent)) continue;
+      const periods = quest.quest_periods ?? [];
+      if (periods.length === 0) {
+        permanent[type].push(quest);
+        continue;
+      }
+      for (const p of periods) friseSets[type].add(p.period_identifier);
+      if (periods.some((p) => p.period_identifier === selectedPeriods[type])) {
+        scheduled[type].push(quest);
+      }
     }
 
-    const archiveMap = new Map<string, QuestWithRelations[]>();
-    for (const quest of archived) {
-      const key = getLatestPeriod(quest);
-      if (!archiveMap.has(key)) archiveMap.set(key, []);
-      archiveMap.get(key)!.push(quest);
+    const frise: Record<PeriodType, string[]> = {
+      weekly: [...friseSets.weekly].sort(),
+      monthly: [...friseSets.monthly].sort(),
+      yearly: [...friseSets.yearly].sort(),
+    };
+
+    const byOrder = (a: QuestWithRelations, b: QuestWithRelations) =>
+      a.display_order - b.display_order;
+    for (const t of PERIOD_TYPES) {
+      permanent[t.type].sort(byOrder);
+      scheduled[t.type].sort(byOrder);
     }
 
     return {
-      currentQuests: current,
-      upcomingByPeriod: upcomingMap,
-      archivesByPeriod: archiveMap,
+      permanentByType: permanent,
+      friseByType: frise,
+      scheduledByType: scheduled,
     };
-  }, [quests, selectedPeriod, currentPeriodId]);
+  }, [visibleQuests, selectedPeriods, currentIds]);
 
-  const upcomingTotal = useMemo(
-    () =>
-      [...upcomingByPeriod.values()].reduce((sum, arr) => sum + arr.length, 0),
-    [upcomingByPeriod],
-  );
-  const archivedTotal = useMemo(
-    () =>
-      [...archivesByPeriod.values()].reduce((sum, arr) => sum + arr.length, 0),
-    [archivesByPeriod],
-  );
+  // Stats de participation pour les colonnes pointant sur une période passée.
+  const pastStatsSignature = PERIOD_TYPES.map(({ type }) => {
+    const isPast = selectedPeriods[type] < currentIds[type];
+    if (!isPast) return `${type}:`;
+    return `${type}:${selectedPeriods[type]}:${scheduledByType[type]
+      .map((q) => q.id)
+      .join(",")}`;
+  }).join("|");
 
-  const sortedUpcomingPeriods = useMemo(
-    () => [...upcomingByPeriod.keys()].sort(),
-    [upcomingByPeriod],
-  );
-  const sortedArchivePeriods = useMemo(
-    () => [...archivesByPeriod.keys()].sort().reverse(),
-    [archivesByPeriod],
-  );
+  const { data: statsByType } = useQuery({
+    queryKey: [...questKeys.all, "period-stats", pastStatsSignature],
+    queryFn: async () => {
+      const result: Record<PeriodType, Map<number, QuestProgressStats>> = {
+        weekly: new Map(),
+        monthly: new Map(),
+        yearly: new Map(),
+      };
+      await Promise.all(
+        PERIOD_TYPES.map(async ({ type }) => {
+          if (selectedPeriods[type] >= currentIds[type]) return;
+          const ids = scheduledByType[type].map((q) => q.id);
+          if (ids.length === 0) return;
+          result[type] = await getQuestProgressStatsForPeriod(
+            ids,
+            selectedPeriods[type],
+          );
+        }),
+      );
+      return result;
+    },
+    enabled: PERIOD_TYPES.some(
+      ({ type }) =>
+        selectedPeriods[type] < currentIds[type] &&
+        scheduledByType[type].length > 0,
+    ),
+  });
 
-  const archivedQuestIds = useMemo(
-    () => [...archivesByPeriod.values()].flat().map((q) => q.id),
-    [archivesByPeriod],
+  const hasPermanent = PERIOD_TYPES.some(
+    ({ type }) => permanentByType[type].length > 0,
   );
-
-  const { data: archiveStats = new Map<number, QuestProgressStats>() } =
-    useQuery({
-      queryKey: [
-        ...questKeys.all,
-        "archive-stats",
-        selectedPeriod,
-        archivedQuestIds.join(","),
-      ],
-      queryFn: () => getQuestProgressStatsByQuests(archivedQuestIds),
-      enabled: viewMode === "archives" && archivedQuestIds.length > 0,
-    });
 
   const toggleActiveMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
@@ -344,11 +419,6 @@ export default function QuestsPage() {
     },
   });
 
-  const handlePeriodTabChange = (value: PeriodType) => {
-    setSelectedPeriod(value);
-    setViewMode("current");
-  };
-
   const handleExportTemplate = () => {
     downloadCsv(generateQuestsCsvTemplate(), "quetes_template.csv");
     toast.success("Template CSV téléchargé");
@@ -378,35 +448,19 @@ export default function QuestsPage() {
     e.target.value = "";
   };
 
-  const renderTypeAndObjective = (quest: QuestWithRelations) => (
-    <>
-      <TableCell>
-        <Badge variant="outline">{questTypeLabels[quest.quest_type]}</Badge>
-      </TableCell>
-      <TableCell>
-        <span className="font-medium">
-          {quest.quest_type === "amount_spent"
-            ? formatCurrency(quest.target_value)
-            : quest.target_value}
-        </span>
-        <span className="text-muted-foreground ml-1">
-          {quest.quest_type === "xp_earned" && "XP"}
-          {quest.quest_type === "cashback_earned" && "PdB"}
-          {quest.quest_type === "establishments_visited" && "établissements"}
-          {quest.quest_type === "orders_count" && "commandes"}
-          {quest.quest_type === "quest_completed" && "sous-périodes"}
-          {quest.quest_type === "consumption_count" &&
-            (quest.consumption_type ?? "produits")}
-        </span>
-      </TableCell>
-    </>
-  );
+  // ---- Sous-composants de rendu ----
 
-  const renderRewards = (quest: QuestWithRelations) => (
-    <TableCell>
-      <div className="space-y-1">
+  const renderRewards = (quest: QuestWithRelations) => {
+    const hasReward =
+      quest.coupon_templates ||
+      quest.badge_types ||
+      quest.bonus_xp > 0 ||
+      quest.bonus_cashback > 0;
+    if (!hasReward) return null;
+    return (
+      <div className="flex flex-wrap gap-1">
         {quest.coupon_templates && (
-          <Badge variant="secondary" className="mr-1">
+          <Badge variant="secondary" className="text-[10px]">
             {quest.coupon_templates.amount
               ? formatCurrency(quest.coupon_templates.amount)
               : quest.coupon_templates.percentage
@@ -415,214 +469,266 @@ export default function QuestsPage() {
           </Badge>
         )}
         {quest.badge_types && (
-          <Badge variant="secondary" className="mr-1">
+          <Badge variant="secondary" className="text-[10px]">
             {quest.badge_types.name}
           </Badge>
         )}
         {quest.bonus_xp > 0 && (
-          <Badge variant="outline" className="mr-1">
+          <Badge variant="outline" className="text-[10px]">
             +{quest.bonus_xp} XP
           </Badge>
         )}
         {quest.bonus_cashback > 0 && (
-          <Badge variant="outline">
+          <Badge variant="outline" className="text-[10px]">
             +{formatCurrency(quest.bonus_cashback)}
           </Badge>
         )}
-        {!quest.coupon_templates &&
-          !quest.badge_types &&
-          quest.bonus_xp === 0 &&
-          quest.bonus_cashback === 0 && (
-            <span className="text-muted-foreground">Aucune</span>
-          )}
       </div>
-    </TableCell>
-  );
-
-  const renderNameCell = (quest: QuestWithRelations, dim: boolean) => {
-    const Icon = questTypeIcons[quest.quest_type];
-    return (
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Icon
-            className={cn("h-5 w-5", dim ? "text-muted-foreground" : "text-primary")}
-          />
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-medium">{quest.name}</p>
-              {dim && quest.is_active && (
-                <Badge
-                  variant="secondary"
-                  className="gap-1 bg-red-100 text-red-800 text-xs"
-                  title="Cette quête est classée en archives mais reste active. Tant qu'elle est active sans période planifiée, elle peut continuer à récompenser. Désactivez-la si elle ne doit plus tourner."
-                >
-                  <AlertCircle className="h-3 w-3" />
-                  Encore active
-                </Badge>
-              )}
-            </div>
-            {quest.description && (
-              <p className="text-sm text-muted-foreground line-clamp-1">
-                {quest.description}
-              </p>
-            )}
-          </div>
-        </div>
-      </TableCell>
     );
   };
 
-  const renderActiveTable = (questList: QuestWithRelations[]) => (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Quête</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Objectif</TableHead>
-          <TableHead>Périodes</TableHead>
-          <TableHead>Récompenses</TableHead>
-          <TableHead>Ratio CB</TableHead>
-          <TableHead>Active</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {[...questList]
-          .sort((a, b) => a.display_order - b.display_order)
-          .map((quest) => (
-            <TableRow
-              key={quest.id}
-              className="cursor-pointer"
-              onClick={() => router.push(`/quests/${quest.id}`)}
-            >
-              {renderNameCell(quest, false)}
-              {renderTypeAndObjective(quest)}
-              <TableCell>
-                {quest.quest_periods && quest.quest_periods.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 max-w-[150px]">
-                    {quest.quest_periods.slice(0, 3).map((p) => (
-                      <Badge key={p.id} variant="outline" className="text-xs">
-                        {p.period_identifier}
-                      </Badge>
-                    ))}
-                    {quest.quest_periods.length > 3 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{quest.quest_periods.length - 3}
-                      </Badge>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground italic">
-                    Toutes
-                  </span>
-                )}
-              </TableCell>
-              {renderRewards(quest)}
-              <TableCell>{renderRatioCb(quest)}</TableCell>
-              <TableCell onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={quest.is_active}
-                    onCheckedChange={(checked) =>
-                      toggleActiveMutation.mutate({
-                        id: quest.id,
-                        isActive: checked,
-                      })
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    title="Dupliquer la quête"
-                    disabled={duplicatingId === quest.id}
-                    onClick={() => duplicateMutation.mutate(quest.id)}
-                  >
-                    {duplicatingId === quest.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-      </TableBody>
-    </Table>
-  );
+  const renderParticipation = (stats?: QuestProgressStats) => {
+    if (!stats || stats.total === 0) {
+      return <span className="text-xs text-muted-foreground">Aucune participation</span>;
+    }
+    const success = stats.completed + stats.rewarded;
+    return (
+      <div className="flex items-center gap-1.5">
+        <Badge
+          variant="secondary"
+          className="bg-emerald-100 text-emerald-800 text-[10px]"
+        >
+          {success} réussie{success > 1 ? "s" : ""}
+        </Badge>
+        {stats.expired > 0 && (
+          <Badge
+            variant="secondary"
+            className="bg-red-100 text-red-800 text-[10px]"
+          >
+            {stats.expired} expirée{stats.expired > 1 ? "s" : ""}
+          </Badge>
+        )}
+        <span className="text-[10px] text-muted-foreground">
+          {stats.total} part.
+        </span>
+      </div>
+    );
+  };
 
-  const renderArchivedTable = (questList: QuestWithRelations[]) => (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Quête</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Objectif</TableHead>
-          <TableHead>Récompenses</TableHead>
-          <TableHead>Participation</TableHead>
-          <TableHead>Active</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {[...questList]
-          .sort((a, b) => a.display_order - b.display_order)
-          .map((quest) => {
-            const stats = archiveStats.get(quest.id);
-            const successCount = stats ? stats.completed + stats.rewarded : 0;
-            const expiredCount = stats?.expired ?? 0;
-            const total = stats?.total ?? 0;
-            return (
-              <TableRow
-                key={quest.id}
-                className="cursor-pointer"
-                onClick={() => router.push(`/quests/${quest.id}`)}
+  const renderQuestCard = (
+    quest: QuestWithRelations,
+    opts: { past?: boolean; stats?: QuestProgressStats; permanent?: boolean },
+  ) => {
+    const Icon = questTypeIcons[quest.quest_type];
+    return (
+      <div
+        key={quest.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => router.push(`/quests/${quest.id}`)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") router.push(`/quests/${quest.id}`);
+        }}
+        className="group rounded-lg border bg-card p-3 space-y-2 cursor-pointer transition-colors hover:bg-muted/50"
+      >
+        <div className="flex items-start gap-2">
+          <Icon
+            className={cn(
+              "h-4 w-4 mt-0.5 shrink-0",
+              quest.is_active ? "text-primary" : "text-muted-foreground",
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="font-medium text-sm leading-tight">{quest.name}</p>
+              {!quest.is_active && (
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  Inactive
+                </Badge>
+              )}
+              {opts.permanent && quest.is_active && (
+                <Badge
+                  variant="secondary"
+                  className="gap-1 bg-amber-100 text-amber-800 text-[10px]"
+                  title="Quête active sans planning : elle récompense à chaque période. Désactivez-la si elle ne doit plus tourner."
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  En continu
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {questTypeLabels[quest.quest_type]} ·{" "}
+              <span className="font-medium text-foreground">
+                {quest.quest_type === "amount_spent"
+                  ? formatCurrency(quest.target_value)
+                  : quest.target_value}{" "}
+                {objectiveUnit(quest)}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {renderRewards(quest)}
+
+        <div
+          className="flex items-center justify-between pt-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {opts.past ? (
+            renderParticipation(opts.stats)
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Switch
+                checked={quest.is_active}
+                disabled={toggleActiveMutation.isPending}
+                onCheckedChange={(checked) =>
+                  toggleActiveMutation.mutate({
+                    id: quest.id,
+                    isActive: checked,
+                  })
+                }
+              />
+              <span className="text-[10px] text-muted-foreground">
+                {quest.is_active ? "Active" : "Inactive"}
+              </span>
+            </div>
+          )}
+          {!opts.past && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title="Dupliquer la quête"
+              disabled={duplicatingId === quest.id}
+              onClick={() => duplicateMutation.mutate(quest.id)}
+            >
+              {duplicatingId === quest.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderFrise = (type: PeriodType) => {
+    const periods = friseByType[type];
+    const selected = selectedPeriods[type];
+    const current = currentIds[type];
+    return (
+      <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        {periods.map((pid) => {
+          const isSel = pid === selected;
+          const isCur = pid === current;
+          const isPast = pid < current;
+          return (
+            <button
+              key={pid}
+              type="button"
+              onClick={() => setAnchor((prev) => periodToAnchor(type, pid, prev))}
+              title={formatPeriodLabel(type, pid)}
+              className={cn(
+                "shrink-0 rounded px-2 py-1 text-xs font-medium transition-colors whitespace-nowrap",
+                isSel
+                  ? "bg-primary text-primary-foreground"
+                  : isPast
+                  ? "text-muted-foreground hover:bg-muted"
+                  : "text-foreground hover:bg-muted",
+                isCur && !isSel && "ring-1 ring-primary/50",
+              )}
+            >
+              {shortPeriodLabel(type, pid)}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderRow = ({
+    type,
+    label,
+  }: {
+    type: PeriodType;
+    label: string;
+  }) => {
+    const selected = selectedPeriods[type];
+    const current = currentIds[type];
+    const list = scheduledByType[type];
+    const isPast = selected < current;
+    const isFuture = selected > current;
+    const stats = statsByType?.[type];
+
+    return (
+      <div key={type} className="rounded-lg border bg-muted/20">
+        <div className="border-b p-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <span className="font-semibold text-sm uppercase tracking-wide">
+              {label}
+            </span>
+            {isPast && (
+              <Badge variant="outline" className="text-[10px]">
+                Passée
+              </Badge>
+            )}
+            {isFuture && (
+              <Badge
+                variant="secondary"
+                className="bg-blue-100 text-blue-800 text-[10px]"
               >
-                {renderNameCell(quest, true)}
-                {renderTypeAndObjective(quest)}
-                {renderRewards(quest)}
-                <TableCell>
-                  {total === 0 ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : (
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <Badge
-                          variant="secondary"
-                          className="bg-emerald-100 text-emerald-800 text-xs"
-                        >
-                          {successCount} réussie{successCount > 1 ? "s" : ""}
-                        </Badge>
-                        <Badge
-                          variant="secondary"
-                          className="bg-red-100 text-red-800 text-xs"
-                        >
-                          {expiredCount} expirée{expiredCount > 1 ? "s" : ""}
-                        </Badge>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {total} participant{total > 1 ? "s" : ""}
-                      </span>
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Switch
-                    checked={quest.is_active}
-                    disabled={toggleActiveMutation.isPending}
-                    onCheckedChange={(checked) =>
-                      toggleActiveMutation.mutate({
-                        id: quest.id,
-                        isActive: checked,
-                      })
-                    }
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-      </TableBody>
-    </Table>
-  );
+                À venir
+              </Badge>
+            )}
+            {!isPast && !isFuture && (
+              <Badge
+                variant="secondary"
+                className="bg-emerald-100 text-emerald-800 text-[10px]"
+              >
+                En cours
+              </Badge>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {formatPeriodLabel(type, selected)}
+            </span>
+            {selected !== current && (
+              <button
+                type="button"
+                onClick={() => setAnchor(new Date())}
+                className="text-[10px] text-primary hover:underline whitespace-nowrap"
+              >
+                Aujourd&apos;hui
+              </button>
+            )}
+          </div>
+          <div className="lg:max-w-[60%]">{renderFrise(type)}</div>
+        </div>
+
+        <div className="p-3">
+          {list.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-1 py-6 text-center">
+              <CalendarClock className="h-5 w-5 text-muted-foreground/50" />
+              <p className="text-xs text-muted-foreground">
+                Aucune quête planifiée sur cette période.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {list.map((quest) =>
+                renderQuestCard(quest, {
+                  past: isPast,
+                  stats: stats?.get(quest.id),
+                }),
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -638,10 +744,24 @@ export default function QuestsPage() {
         <div>
           <h1 className="text-3xl font-bold">Quêtes</h1>
           <p className="text-muted-foreground">
-            Configurez les défis périodiques pour les utilisateurs.
+            Visualisez les défis actifs sur chaque période — semaine, mois,
+            année.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-inactive"
+              checked={showInactive}
+              onCheckedChange={setShowInactive}
+            />
+            <Label
+              htmlFor="show-inactive"
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
+              Inactives
+            </Label>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -660,9 +780,7 @@ export default function QuestsPage() {
                 Exporter les quêtes
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => fileInputRef.current?.click()}
-              >
+              <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" />
                 Importer un CSV
               </DropdownMenuItem>
@@ -684,140 +802,36 @@ export default function QuestsPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Liste des quêtes</CardTitle>
-          <CardDescription>
-            Définissez les objectifs et récompenses pour chaque période.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Tabs
-            value={selectedPeriod}
-            onValueChange={(v) => handlePeriodTabChange(v as PeriodType)}
-          >
-            <TabsList>
-              <TabsTrigger value="weekly" className="text-xs sm:text-sm">
-                Hebdo
-              </TabsTrigger>
-              <TabsTrigger value="monthly" className="text-xs sm:text-sm">
-                Mensuel
-              </TabsTrigger>
-              <TabsTrigger value="yearly" className="text-xs sm:text-sm">
-                Annuel
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value={selectedPeriod} className="mt-4 space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div
-                  role="radiogroup"
-                  className="inline-flex rounded-md border bg-muted p-1"
-                >
-                  {(
-                    [
-                      { mode: "current" as const, count: currentQuests.length },
-                      { mode: "upcoming" as const, count: upcomingTotal },
-                      { mode: "archives" as const, count: archivedTotal },
-                    ]
-                  ).map(({ mode, count }) => {
-                    const active = viewMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setViewMode(mode)}
-                        className={cn(
-                          "rounded px-3 py-1 text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5",
-                          active
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {viewModeLabels[mode]}
-                        <span
-                          className={cn(
-                            "rounded-full px-1.5 text-[10px]",
-                            active
-                              ? "bg-muted text-muted-foreground"
-                              : "bg-background/80",
-                          )}
-                        >
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
+      {hasPermanent && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <InfinityIcon className="h-4 w-4 text-amber-600" />
+              Permanentes — actives à chaque période
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {PERIOD_TYPES.filter(
+              ({ type }) => permanentByType[type].length > 0,
+            ).map(({ type, label }) => (
+              <div key={type} className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {label}
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {permanentByType[type].map((quest) =>
+                    renderQuestCard(quest, { permanent: true }),
+                  )}
                 </div>
-                {viewMode === "current" && (
-                  <Badge variant="secondary">{currentPeriodId}</Badge>
-                )}
               </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
-              {viewMode === "current" &&
-                (currentQuests.length === 0 ? (
-                  <div className="py-8 text-center text-muted-foreground border rounded-lg">
-                    Aucune quête configurée pour la période en cours.
-                  </div>
-                ) : (
-                  renderActiveTable(currentQuests)
-                ))}
-
-              {viewMode === "upcoming" &&
-                (upcomingTotal === 0 ? (
-                  <div className="py-8 text-center text-muted-foreground border rounded-lg">
-                    Aucune quête planifiée pour une période future.
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {sortedUpcomingPeriods.map((period) => {
-                      const periodQuests = upcomingByPeriod.get(period)!;
-                      return (
-                        <div key={period}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline">{period}</Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {periodQuests.length} quête
-                              {periodQuests.length > 1 ? "s" : ""}
-                            </span>
-                          </div>
-                          {renderActiveTable(periodQuests)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-
-              {viewMode === "archives" &&
-                (archivedTotal === 0 ? (
-                  <div className="py-8 text-center text-muted-foreground border rounded-lg">
-                    Aucune quête archivée pour ce type de période.
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {sortedArchivePeriods.map((period) => {
-                      const periodQuests = archivesByPeriod.get(period)!;
-                      return (
-                        <div key={period}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline">{period}</Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {periodQuests.length} quête
-                              {periodQuests.length > 1 ? "s" : ""}
-                            </span>
-                          </div>
-                          {renderArchivedTable(periodQuests)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        {PERIOD_TYPES.map((pt) => renderRow(pt))}
+      </div>
 
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -941,9 +955,7 @@ export default function QuestsPage() {
             </Button>
             <Button
               onClick={() => importMutation.mutate(importPreview)}
-              disabled={
-                importMutation.isPending || importPreview.length === 0
-              }
+              disabled={importMutation.isPending || importPreview.length === 0}
             >
               {importMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -963,25 +975,4 @@ export default function QuestsPage() {
       />
     </div>
   );
-}
-
-function renderRatioCb(quest: QuestWithRelations) {
-  const totalCashback =
-    quest.bonus_cashback + (quest.coupon_templates?.amount || 0);
-  if (totalCashback === 0) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-  let spentCentimes: number | null = null;
-  if (quest.quest_type === "amount_spent") {
-    spentCentimes = quest.target_value;
-  } else if (quest.quest_type === "cashback_earned") {
-    spentCentimes = quest.target_value * 100;
-  } else if (quest.quest_type === "xp_earned") {
-    spentCentimes = Math.round((quest.target_value / 1.66) * 100);
-  }
-  if (spentCentimes == null || spentCentimes <= 0) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-  const ratio = (totalCashback / spentCentimes) * 100;
-  return <span className="font-medium tabular-nums">{ratio.toFixed(1)}%</span>;
 }
