@@ -309,6 +309,57 @@ export type Database = {
         }
         Relationships: []
       }
+      cashpad_closures: {
+        Row: {
+          archive_count: number
+          cashpad_sequential_id: number | null
+          establishment_id: number
+          fiscal_date: string
+          id: number
+          installation_id: string
+          range_begin: string
+          range_end: string
+          updated_at: string
+        }
+        Insert: {
+          archive_count?: number
+          cashpad_sequential_id?: number | null
+          establishment_id: number
+          fiscal_date: string
+          id?: never
+          installation_id: string
+          range_begin: string
+          range_end: string
+          updated_at?: string
+        }
+        Update: {
+          archive_count?: number
+          cashpad_sequential_id?: number | null
+          establishment_id?: number
+          fiscal_date?: string
+          id?: never
+          installation_id?: string
+          range_begin?: string
+          range_end?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashpad_closures_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "cashpad_closures_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cashpad_employee_mappings: {
         Row: {
           cashpad_user_id: string
@@ -1001,6 +1052,45 @@ export type Database = {
           },
         ]
       }
+      establishment_consumption_types: {
+        Row: {
+          consumption_type: Database["public"]["Enums"]["consumption_type"]
+          created_at: string
+          establishment_id: number
+          id: number
+          is_active: boolean
+        }
+        Insert: {
+          consumption_type: Database["public"]["Enums"]["consumption_type"]
+          created_at?: string
+          establishment_id: number
+          id?: never
+          is_active?: boolean
+        }
+        Update: {
+          consumption_type?: Database["public"]["Enums"]["consumption_type"]
+          created_at?: string
+          establishment_id?: number
+          id?: never
+          is_active?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "establishment_consumption_types_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "cashpad_health_stats_30d"
+            referencedColumns: ["establishment_id"]
+          },
+          {
+            foreignKeyName: "establishment_consumption_types_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       establishment_groups: {
         Row: {
           cashpad_installation_id: string | null
@@ -1686,6 +1776,7 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          identity_photo_updated_at: string | null
           identity_photo_url: string | null
           is_test: boolean
           last_name: string | null
@@ -1708,6 +1799,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          identity_photo_updated_at?: string | null
           identity_photo_url?: string | null
           is_test?: boolean
           last_name?: string | null
@@ -1730,6 +1822,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          identity_photo_updated_at?: string | null
           identity_photo_url?: string | null
           is_test?: boolean
           last_name?: string | null
@@ -2823,6 +2916,14 @@ export type Database = {
       }
     }
     Functions: {
+      admin_delete_receipt: {
+        Args: { p_receipt_id: number }
+        Returns: undefined
+      }
+      admin_reset_identity_photo_cooldown: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       assert_admin: { Args: never; Returns: undefined }
       assert_admin_or_establishment_for: {
         Args: { p_establishment_id: number }
@@ -3019,6 +3120,32 @@ export type Database = {
           p_start_date: string
         }
         Returns: Json
+      }
+      get_analytics_timeline: {
+        Args: {
+          p_end_date: string
+          p_establishment_ids?: number[]
+          p_start_date: string
+        }
+        Returns: {
+          establishment_id: number
+          establishment_title: string
+          fiscal_date: string
+          is_fallback_calendar: boolean
+          pdb_organic_cents: number
+          pdb_payments_cents: number
+          range_begin: string
+          range_end: string
+          transactions_amount_cents: number
+        }[]
+      }
+      get_analytics_timeline_global: {
+        Args: { p_end_date: string; p_start_date: string }
+        Returns: {
+          fiscal_date: string
+          pdb_reward_cents: number
+          pdb_total_generated_cents: number
+        }[]
       }
       get_coupon_stats: { Args: never; Returns: Json }
       get_current_user_role: { Args: never; Returns: string }
@@ -3397,6 +3524,7 @@ export const Constants = {
         "soft",
         "boisson_chaude",
         "restauration",
+        "boucherie",
       ],
       payment_method: ["card", "cash", "cashback", "coupon"],
       quest_type: [

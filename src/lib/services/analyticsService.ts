@@ -1032,3 +1032,80 @@ export async function getDrilldownActiveCoupons(
 
   return { data: rows, count: count || 0 };
 }
+
+// =============================================================================
+// TIMELINE ANALYTICS — refonte /analytics (tableau par journée fiscale)
+// =============================================================================
+
+/**
+ * Une ligne de la timeline : métriques d'un établissement sur une journée
+ * fiscale (clôture → clôture). Montants en centimes / PdB.
+ * `is_fallback_calendar` = true quand aucune clôture Cashpad ne couvrait le
+ * receipt (établissement sans Cashpad ou période pas encore backfillée) : le
+ * bucket retombe alors sur le jour calendaire Europe/Paris.
+ */
+export interface TimelineRow {
+  establishment_id: number;
+  establishment_title: string;
+  fiscal_date: string;
+  range_begin: string | null;
+  range_end: string | null;
+  /** Paiements réglés en PdB (centimes). 1 PdB = 1 centime → afficher en €. */
+  pdb_payments_cents: number;
+  /** Montant total des tickets sur la journée (centimes) → afficher en €. */
+  transactions_amount_cents: number;
+  /** PdB organiques générés (centimes) → afficher en €. */
+  pdb_organic_cents: number;
+  is_fallback_calendar: boolean;
+}
+
+/**
+ * Ligne globale (toutes enseignes) : PdB récompense / total générés par jour
+ * calendaire. Les récompenses n'ont pas d'establishment_id rattaché — provisoire
+ * en attendant le modèle de dettes inter-établissements.
+ */
+export interface TimelineGlobalRow {
+  fiscal_date: string;
+  pdb_reward_cents: number;
+  pdb_total_generated_cents: number;
+}
+
+/**
+ * Métriques par établissement et journée fiscale (paiements PdB, nb
+ * transactions, PdB organiques). `establishmentIds` vide ou null = tous.
+ */
+export async function getAnalyticsTimeline(
+  startDate: string,
+  endDate: string,
+  establishmentIds?: number[]
+): Promise<TimelineRow[]> {
+  const supabase = createClient();
+
+  const { data, error } = await (supabase.rpc as any)("get_analytics_timeline", {
+    p_start_date: startDate,
+    p_end_date: endDate,
+    p_establishment_ids:
+      establishmentIds && establishmentIds.length > 0 ? establishmentIds : null,
+  });
+
+  if (error) throw error;
+  return (data || []) as TimelineRow[];
+}
+
+/**
+ * PdB récompense / total générés par jour calendaire (global, toutes enseignes).
+ */
+export async function getAnalyticsTimelineGlobal(
+  startDate: string,
+  endDate: string
+): Promise<TimelineGlobalRow[]> {
+  const supabase = createClient();
+
+  const { data, error } = await (supabase.rpc as any)(
+    "get_analytics_timeline_global",
+    { p_start_date: startDate, p_end_date: endDate }
+  );
+
+  if (error) throw error;
+  return (data || []) as TimelineGlobalRow[];
+}

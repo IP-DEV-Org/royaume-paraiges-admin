@@ -110,3 +110,24 @@ export const reconciliationKeys = {
   candidatesByIds: (ids: string[]) =>
     [...reconciliationKeys.all, "candidatesByIds", [...ids].sort()] as const,
 };
+
+export const analyticsKeys = {
+  all: ["analytics"] as const,
+  timeline: (filters: {
+    startDate: string;
+    endDate: string;
+    establishmentIds: number[];
+  }) =>
+    [
+      ...analyticsKeys.all,
+      "timeline",
+      {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        // trié pour une identité de clé stable quel que soit l'ordre de sélection
+        establishmentIds: [...filters.establishmentIds].sort((a, b) => a - b),
+      },
+    ] as const,
+  timelineGlobal: (filters: { startDate: string; endDate: string }) =>
+    [...analyticsKeys.all, "timelineGlobal", filters] as const,
+};
