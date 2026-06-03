@@ -58,6 +58,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
+import { UserQrCode } from "@/components/user-qr-code";
 import {
   getUserWithStats,
   updateUser,
@@ -775,6 +776,18 @@ export default function UserDetailPage() {
                     <p className="font-medium">{formatCurrency(fullStats?.cashbackSpent || 0)}</p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>QR code client</CardTitle>
+                <CardDescription>
+                  Sceau personnel présenté au comptoir, identique à celui de l&apos;app client.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-center py-2">
+                <UserQrCode userId={user.id} />
               </CardContent>
             </Card>
           </div>
