@@ -6,7 +6,6 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { analyticsKeys } from "@/lib/queries/keys";
 import {
   getAnalyticsTimeline,
-  getAnalyticsTimelineGlobal,
   type DrilldownFilters,
   type DrilldownMetric,
   type TimelineRow,
@@ -27,10 +26,6 @@ import {
   TimelineTable,
   type TimelineCellMetric,
 } from "@/components/analytics/timeline-table";
-import {
-  TimelineGlobalBlock,
-  type GlobalCellMetric,
-} from "@/components/analytics/timeline-global-block";
 
 /** Jour calendaire suivant (YYYY-MM-DD) — borne de fin exclusive pour le drilldown. */
 function nextDay(dateISO: string): string {
@@ -107,31 +102,23 @@ export default function AnalyticsPage() {
     placeholderData: keepPreviousData,
   });
 
-  const globalQuery = useQuery({
-    queryKey: analyticsKeys.timelineGlobal({ startDate, endDate }),
-    queryFn: () => getAnalyticsTimelineGlobal(startDate, endDate),
-    placeholderData: keepPreviousData,
-  });
-
   const timelineRows = useMemo(
     () => timelineQuery.data ?? [],
     [timelineQuery.data]
   );
-  const globalRows = useMemo(() => globalQuery.data ?? [], [globalQuery.data]);
 
-  // Colonnes = union triée des journées fiscales (par-étab + global) sur la période.
+  // Colonnes = journées fiscales présentes sur la période, triées.
   const columns = useMemo(() => {
     const set = new Set<string>();
     for (const r of timelineRows) set.add(r.fiscal_date);
-    for (const r of globalRows) set.add(r.fiscal_date);
     return Array.from(set).sort();
-  }, [timelineRows, globalRows]);
+  }, [timelineRows]);
 
   const openTimelineDrilldown = (row: TimelineRow, metric: TimelineCellMetric) => {
     const ddMetric: DrilldownMetric = metric === "organic" ? "gainsOrganic" : "receipts";
 
-    // « Paiements en PdB » = somme des lignes payées en cashback → ne montrer que ces receipts.
-    const onlyCashbackPayments = metric === "payments";
+    // « Paiements PdB » = somme des lignes payées en cashback → ne montrer que ces receipts.
+    const onlyCashbackPayments = metric === "pdb_payment";
 
     let filters: DrilldownFilters;
     if (!row.is_fallback_calendar && row.range_begin && row.range_end) {
@@ -151,28 +138,16 @@ export default function AnalyticsPage() {
     }
 
     const metricLabel =
-      metric === "payments"
-        ? "Paiements en PdB"
-        : metric === "transactions"
-          ? "Montant des transactions"
+      metric === "euro"
+        ? "Euros Royaume (selon Royaume)"
+        : metric === "pdb_payment"
+          ? "Paiements PdB (selon Royaume)"
           : "PdB organiques";
 
     setDrilldownMetric(ddMetric);
     setDrilldownFilters(filters);
     setDrilldownTitle(
       `${row.establishment_title} — ${metricLabel} · ${formatDateFr(row.fiscal_date)}`
-    );
-    setDrilldownOpen(true);
-  };
-
-  const openGlobalDrilldown = (fiscalDate: string, metric: GlobalCellMetric) => {
-    setDrilldownMetric(metric);
-    setDrilldownFilters({
-      startDate: fiscalDate,
-      endDate: nextDay(fiscalDate),
-    });
-    setDrilldownTitle(
-      `${metric === "gainsRewards" ? "PdB récompense" : "PdB total"} · ${formatDateFr(fiscalDate)}`
     );
     setDrilldownOpen(true);
   };
@@ -220,19 +195,6 @@ export default function AnalyticsPage() {
           loading={isLoading}
           onCellClick={openTimelineDrilldown}
           stickyHeaderTop={stickyTop}
-        />
-      </div>
-
-      {/* Bloc global provisoire (récompense / total) */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Génération de PdB — vue globale
-        </h2>
-        <TimelineGlobalBlock
-          rows={globalRows}
-          columns={columns}
-          loading={globalQuery.isLoading}
-          onCellClick={openGlobalDrilldown}
         />
       </div>
 

@@ -16,51 +16,111 @@ import { cn, formatCurrency } from "@/lib/utils";
 // JS sur l'entête. Le scroll vertical reste celui de la page (<main>).
 // =============================================================================
 
-export type TimelineCellMetric = "payments" | "transactions" | "organic";
+// Métriques cliquables → ouvrent le drilldown des receipts/gains correspondants.
+export type TimelineCellMetric = "euro" | "pdb_payment" | "organic";
 
 // Largeurs de colonnes FIXES (px) → l'entête et le corps s'alignent sans mesure.
-const FIRST_COL_W = 240;
-const COL_W = 132;
+const FIRST_COL_W = 340;
+const COL_W = 200;
+
+type CurrencyField =
+  | "euro_cashpad_other_cents"
+  | "euro_cashpad_cents"
+  | "euro_royaume_cents"
+  | "pdb_cashpad_cents"
+  | "pdb_royaume_cents"
+  | "pdb_organic_cents"
+  | "pdb_quest_cents";
 
 interface MetricConfig {
-  key: TimelineCellMetric | "cashpad_euro";
+  key: string;
   label: string;
   hint: string;
-  kind: "currency" | "placeholder";
+  /** `currency` = montant d'un champ ; `diff` = écart Cashpad − Royaume calculé. */
+  kind: "currency" | "diff";
+  /** Présent → cellule cliquable (ouvre le drilldown). */
   metric?: TimelineCellMetric;
-  field?: "pdb_payments_cents" | "transactions_amount_cents" | "pdb_organic_cents";
+  /** Champ affiché pour `kind: "currency"`. */
+  field?: CurrencyField;
+  /** Paire (Cashpad, Royaume) pour `kind: "diff"` → écart = Cashpad − Royaume. */
+  diff?: { cashpad: CurrencyField; royaume: CurrencyField };
+  /** Trait épais avant cette ligne (séparation de blocs). */
+  separatorBefore?: boolean;
 }
 
 const METRICS: MetricConfig[] = [
+  // Bloc 0 — Activité caisse Cashpad hors Royaume
   {
-    key: "payments",
-    label: "Paiements en PdB",
-    hint: "Total des Paraiges de Bronze utilisés en paiement (1 PdB = 0,01 €)",
+    key: "euro_cashpad_other",
+    label: "Euros Cashpad",
+    hint: "Montant des paiements Cashpad sans lien avec le Royaume (tous modes sauf « Euros Royaume » et « Paraiges de Bronze ») : Euros simples, CB, Espèces, Ticket resto, Virement…",
     kind: "currency",
-    metric: "payments",
-    field: "pdb_payments_cents",
+    field: "euro_cashpad_other_cents",
+  },
+  // Bloc 1 — Euros Royaume (euros payés par les membres Royaume)
+  {
+    key: "euro_cashpad",
+    label: "Euros Royaume — selon Cashpad",
+    hint: "Montant total des paiements enregistrés en caisse Cashpad avec le mode de paiement « Euros Royaume »",
+    kind: "currency",
+    field: "euro_cashpad_cents",
+    separatorBefore: true,
   },
   {
-    key: "transactions",
-    label: "Montant des transactions",
-    hint: "Somme des montants des tickets enregistrés sur le Royaume",
+    key: "euro_royaume",
+    label: "Euros Royaume — selon Royaume",
+    hint: "Montant en euros (carte + espèces, hors PdB) des receipts scannés avec l'application Scanner du Royaume",
     kind: "currency",
-    metric: "transactions",
-    field: "transactions_amount_cents",
+    metric: "euro",
+    field: "euro_royaume_cents",
   },
+  {
+    key: "euro_diff",
+    label: "Différence (Cashpad − Royaume)",
+    hint: "Écart entre les Euros Royaume encaissés côté Cashpad et les euros scannés côté Royaume. Vert = aucun écart, ambre = divergence à investiguer.",
+    kind: "diff",
+    diff: { cashpad: "euro_cashpad_cents", royaume: "euro_royaume_cents" },
+  },
+  // Bloc 2 — Paiements en Paraiges de Bronze (cashback)
+  {
+    key: "pdb_cashpad",
+    label: "Paiements PdB — selon Cashpad",
+    hint: "Montant total des paiements enregistrés en caisse Cashpad avec le mode de paiement « Paraiges de Bronze »",
+    kind: "currency",
+    field: "pdb_cashpad_cents",
+    separatorBefore: true,
+  },
+  {
+    key: "pdb_royaume",
+    label: "Paiements PdB — selon Royaume",
+    hint: "Montant des receipts scannés réglés en Paraiges de Bronze (cashback) côté Royaume (1 PdB = 0,01 €)",
+    kind: "currency",
+    metric: "pdb_payment",
+    field: "pdb_royaume_cents",
+  },
+  {
+    key: "pdb_diff",
+    label: "Différence (Cashpad − Royaume)",
+    hint: "Écart entre les PdB encaissés côté Cashpad et les paiements PdB scannés côté Royaume. Vert = aucun écart, ambre = divergence à investiguer.",
+    kind: "diff",
+    diff: { cashpad: "pdb_cashpad_cents", royaume: "pdb_royaume_cents" },
+  },
+  // Bloc 3 — Génération de Paraiges de Bronze
   {
     key: "organic",
     label: "PdB organiques générés",
-    hint: "Paraiges de Bronze gagnés en dépensant — cashback (1 PdB = 0,01 €)",
+    hint: "Paraiges de Bronze gagnés en dépensant (cashback organique, hors quêtes) — 1 PdB = 0,01 €",
     kind: "currency",
     metric: "organic",
     field: "pdb_organic_cents",
+    separatorBefore: true,
   },
   {
-    key: "cashpad_euro",
-    label: "Euros Cashpad « euro royaume »",
-    hint: "À venir — paiements en euro royaume côté Cashpad",
-    kind: "placeholder",
+    key: "quest",
+    label: "PdB gains générés",
+    hint: "Paraiges de Bronze gagnés via les quêtes, rattachés à l'établissement du dernier receipt déclencheur (1 PdB = 0,01 €)",
+    kind: "currency",
+    field: "pdb_quest_cents",
   },
 ];
 
@@ -70,6 +130,21 @@ function formatColumnLabel(fiscalDate: string): string {
     day: "2-digit",
     month: "2-digit",
   });
+}
+
+type CellTone = "normal" | "muted" | "match" | "mismatch";
+
+const TONE_CLASS: Record<CellTone, string> = {
+  normal: "",
+  muted: "text-muted-foreground/40",
+  match: "text-emerald-600",
+  mismatch: "font-medium text-amber-600",
+};
+
+/** Écart signé en € : « +12,30 € » / « −12,30 € » / « 0,00 € ». */
+function formatDiff(cents: number): string {
+  if (cents === 0) return formatCurrency(0);
+  return `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`;
 }
 
 interface TimelineTableProps {
@@ -141,9 +216,25 @@ export function TimelineTable({
 
   const tableWidth = FIRST_COL_W + columns.length * COL_W;
 
-  const cellValue = (row: TimelineRow | undefined, m: MetricConfig): string => {
-    if (!row || !m.field) return "—";
-    return formatCurrency(row[m.field]);
+  const renderCell = (
+    row: TimelineRow | undefined,
+    m: MetricConfig
+  ): { text: string; tone: CellTone } => {
+    if (!row) return { text: "—", tone: "muted" };
+
+    if (m.kind === "diff" && m.diff) {
+      const cashpad = row[m.diff.cashpad];
+      const royaume = row[m.diff.royaume];
+      // Pas de donnée Cashpad (fallback calendaire) → écart non calculable.
+      if (cashpad == null) return { text: "—", tone: "muted" };
+      const diff = cashpad - (royaume ?? 0);
+      return { text: formatDiff(diff), tone: diff === 0 ? "match" : "mismatch" };
+    }
+
+    if (!m.field) return { text: "—", tone: "muted" };
+    const v = row[m.field];
+    if (v == null) return { text: "—", tone: "muted" };
+    return { text: formatCurrency(v), tone: "normal" };
   };
 
   const colgroup = (
@@ -165,7 +256,7 @@ export function TimelineTable({
       >
         <table
           className="table-fixed border-collapse text-sm"
-          style={{ width: tableWidth, minWidth: "100%" }}
+          style={{ width: tableWidth }}
         >
           {colgroup}
           <thead>
@@ -201,7 +292,7 @@ export function TimelineTable({
       >
         <table
           className="table-fixed border-collapse text-sm"
-          style={{ width: tableWidth, minWidth: "100%" }}
+          style={{ width: tableWidth }}
         >
           {colgroup}
           <tbody>
@@ -211,7 +302,7 @@ export function TimelineTable({
                 title={group.title}
                 byDate={group.byDate}
                 columns={columns}
-                cellValue={cellValue}
+                renderCell={renderCell}
                 onCellClick={onCellClick}
                 isFirst={gi === 0}
               />
@@ -227,14 +318,17 @@ function GroupRows({
   title,
   byDate,
   columns,
-  cellValue,
+  renderCell,
   onCellClick,
   isFirst,
 }: {
   title: string;
   byDate: Map<string, TimelineRow>;
   columns: string[];
-  cellValue: (row: TimelineRow | undefined, m: MetricConfig) => string;
+  renderCell: (
+    row: TimelineRow | undefined,
+    m: MetricConfig
+  ) => { text: string; tone: CellTone };
   onCellClick: (row: TimelineRow, metric: TimelineCellMetric) => void;
   isFirst: boolean;
 }) {
@@ -261,37 +355,55 @@ function GroupRows({
         ))}
       </tr>
 
-      {METRICS.map((m, idx) => (
-        <tr key={m.key} className={cn("border-t", idx === 0 && "border-t-0")}>
-          <th
-            scope="row"
-            className="sticky left-0 z-10 border-r border-border/50 bg-background px-4 py-2 pl-10 text-left font-normal text-muted-foreground"
-            title={m.hint}
+      {METRICS.map((m, idx) => {
+        const isDiff = m.kind === "diff";
+        // Lignes de métriques en blanc ; seules les lignes de différence (delta)
+        // ont un fond différencié.
+        const rowBg = isDiff ? "bg-muted/60" : "bg-background";
+        return (
+          <tr
+            key={m.key}
+            className={cn(
+              "border-t",
+              idx === 0 && "border-t-0",
+              m.separatorBefore && "border-t-2 border-border",
+              rowBg
+            )}
           >
-            <span className="block break-words">{m.label}</span>
-          </th>
-          {columns.map((c) => {
-            const row = byDate.get(c);
-            const value = cellValue(row, m);
-            const clickable = m.metric && row && value !== "—";
-            return (
-              <td
-                key={c}
-                className={cn(
-                  "border-l border-border/30 px-3 py-2 text-right tabular-nums",
-                  m.kind === "placeholder" && "text-muted-foreground/40",
-                  value === "—" && "text-muted-foreground/40",
-                  clickable &&
-                    "cursor-pointer hover:bg-accent hover:text-accent-foreground"
-                )}
-                onClick={clickable ? () => onCellClick(row!, m.metric!) : undefined}
-              >
-                {value}
-              </td>
-            );
-          })}
-        </tr>
-      ))}
+            <th
+              scope="row"
+              className={cn(
+                "sticky left-0 z-10 border-r border-border/50 px-4 py-2 pl-10 text-left font-normal text-muted-foreground",
+                rowBg,
+                isDiff && "italic"
+              )}
+              title={m.hint}
+            >
+              <span className="block break-words">{m.label}</span>
+            </th>
+            {columns.map((c) => {
+              const row = byDate.get(c);
+              const { text, tone } = renderCell(row, m);
+              const clickable = m.metric && row && text !== "—";
+              return (
+                <td
+                  key={c}
+                  className={cn(
+                    "border-l border-border/30 px-3 py-2 text-right tabular-nums",
+                    rowBg,
+                    TONE_CLASS[tone],
+                    clickable &&
+                      "cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                  )}
+                  onClick={clickable ? () => onCellClick(row!, m.metric!) : undefined}
+                >
+                  {text}
+                </td>
+              );
+            })}
+          </tr>
+        );
+      })}
     </>
   );
 }

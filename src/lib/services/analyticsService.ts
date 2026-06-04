@@ -1061,12 +1061,40 @@ export interface TimelineRow {
   fiscal_date: string;
   range_begin: string | null;
   range_end: string | null;
-  /** Paiements réglés en PdB (centimes). 1 PdB = 1 centime → afficher en €. */
-  pdb_payments_cents: number;
-  /** Montant total des tickets sur la journée (centimes) → afficher en €. */
-  transactions_amount_cents: number;
-  /** PdB organiques générés (centimes) → afficher en €. */
+  /**
+   * « Euros Cashpad » : montant des paiements Cashpad de la clôture SANS lien
+   * Royaume (mode ≠ « Euros Royaume » et ≠ « Paraiges de Bronze ») — Euros simples,
+   * CB, Espèces, Ticket resto, Virement… En centimes. NULL en fallback calendaire.
+   */
+  euro_cashpad_other_cents: number | null;
+  /**
+   * « Euros Royaume » selon Cashpad : montant encaissé via le mode de paiement
+   * Cashpad « Euros Royaume » sur la clôture (millièmes ÷ 10 → centimes).
+   * NULL sur les lignes en fallback calendaire (aucune clôture → pas de Cashpad).
+   */
+  euro_cashpad_cents: number | null;
+  /**
+   * « Euros Royaume » selon Royaume : receipts scannés réglés en EUROS
+   * (receipt_lines `card` + `cash`, hors cashback), en centimes.
+   */
+  euro_royaume_cents: number;
+  /**
+   * Paiements PdB selon Cashpad : montant encaissé via le mode de paiement
+   * Cashpad « Paraiges de Bronze » sur la clôture (centimes). NULL en fallback.
+   */
+  pdb_cashpad_cents: number | null;
+  /**
+   * Paiements PdB selon Royaume : receipts scannés réglés en PdB
+   * (receipt_lines `cashback`), en centimes. 1 PdB = 1 centime.
+   */
+  pdb_royaume_cents: number;
+  /** PdB organiques générés (gains source_type='receipt'), en centimes. */
   pdb_organic_cents: number;
+  /**
+   * PdB gagnés via quêtes (gains source_type='bonus_cashback_quest'), rattachés à
+   * l'établissement du dernier receipt du client antérieur au gain. En centimes.
+   */
+  pdb_quest_cents: number;
   is_fallback_calendar: boolean;
 }
 
