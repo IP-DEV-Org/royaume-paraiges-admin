@@ -130,18 +130,23 @@ export default function AnalyticsPage() {
   const openTimelineDrilldown = (row: TimelineRow, metric: TimelineCellMetric) => {
     const ddMetric: DrilldownMetric = metric === "organic" ? "gainsOrganic" : "receipts";
 
+    // « Paiements en PdB » = somme des lignes payées en cashback → ne montrer que ces receipts.
+    const onlyCashbackPayments = metric === "payments";
+
     let filters: DrilldownFilters;
     if (!row.is_fallback_calendar && row.range_begin && row.range_end) {
       filters = {
         startDate: row.range_begin,
         endDate: new Date(Date.parse(row.range_end) + 1000).toISOString(),
         establishmentId: row.establishment_id,
+        onlyCashbackPayments,
       };
     } else {
       filters = {
         startDate: row.fiscal_date,
         endDate: nextDay(row.fiscal_date),
         establishmentId: row.establishment_id,
+        onlyCashbackPayments,
       };
     }
 

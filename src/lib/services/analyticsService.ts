@@ -700,6 +700,8 @@ export interface DrilldownFilters {
   endDate: string;
   establishmentId?: number;
   employeeId?: string;
+  /** Ne garder que les receipts ayant au moins une ligne de paiement en PdB (cashback). */
+  onlyCashbackPayments?: boolean;
 }
 
 export interface PaginatedResult<T> {
@@ -774,16 +776,25 @@ export async function getDrilldownReceipts(
   const supabase = createClient();
 
   const testIds = await getTestUserIds();
+  // `receipt_lines` (sans alias) ramène toutes les lignes pour calculer carte/espèces/PdB.
+  // `cashback_filter` (alias inner-join, optionnel) restreint le set parent aux receipts
+  // ayant au moins une ligne en PdB — utilisé pour le drilldown « Paiements en PdB ».
+  const cashbackJoin = filters.onlyCashbackPayments
+    ? ", cashback_filter:receipt_lines!inner(payment_method)"
+    : "";
   let query = supabase
     .from("receipts")
     .select(
-      "id, created_at, amount, customer_id, establishment_id, employee_id, profiles!receipts_customer_id_fkey(first_name, last_name), establishments(title), employee:profiles!receipts_employee_id_fkey(first_name, last_name), receipt_lines(amount, payment_method), receipt_consumption_items(id, consumption_type, quantity)",
+      `id, created_at, amount, customer_id, establishment_id, employee_id, profiles!receipts_customer_id_fkey(first_name, last_name), establishments(title), employee:profiles!receipts_employee_id_fkey(first_name, last_name), receipt_lines(amount, payment_method), receipt_consumption_items(id, consumption_type, quantity)${cashbackJoin}`,
       { count: "exact" }
     )
     .gte("created_at", filters.startDate)
     .lt("created_at", filters.endDate)
     .order("created_at", { ascending: false });
 
+  if (filters.onlyCashbackPayments) {
+    query = query.eq("cashback_filter.payment_method", "cashback");
+  }
   if (testIds.length > 0) query = query.not("customer_id", "in", `(${testIds.join(",")})`);
   if (filters.establishmentId) {
     query = query.eq("establishment_id", filters.establishmentId);

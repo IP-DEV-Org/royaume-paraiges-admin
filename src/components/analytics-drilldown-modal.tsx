@@ -593,6 +593,7 @@ export function DrilldownModal({
     filters.endDate,
     filters.establishmentId,
     filters.employeeId,
+    filters.onlyCashbackPayments,
     pageSize,
   ]);
 
@@ -841,15 +842,8 @@ function ReceiptsTable({
                 {formatTime(r.created_at)}
               </div>
             </TableCell>
-            <TableCell>
-              <CustomerLink id={r.customer_id} name={r.customer_name} />
-            </TableCell>
-            <TableCell>
-              <EstablishmentLink
-                id={r.establishment_id}
-                name={r.establishment_name}
-              />
-            </TableCell>
+            <TableCell>{r.customer_name}</TableCell>
+            <TableCell>{r.establishment_name}</TableCell>
             <TableCell className="text-right">
               {r.card_total > 0 ? (
                 <Badge
