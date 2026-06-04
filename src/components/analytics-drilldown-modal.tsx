@@ -50,6 +50,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatTime,
   formatPercentage,
 } from "@/lib/utils";
 import {
@@ -799,7 +800,6 @@ interface TableProps<T> {
 
 function ReceiptsTable({
   data,
-  startIndex,
   selectedId,
   onRowClick,
 }: TableProps<ReceiptDrilldownRow>) {
@@ -807,20 +807,17 @@ function ReceiptsTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-10">#</TableHead>
           <TableHead>Date</TableHead>
           <TableHead>Client</TableHead>
           <TableHead>Établissement</TableHead>
-          <TableHead>Serveur</TableHead>
           <TableHead className="text-right">Carte</TableHead>
-          <TableHead className="text-right">Espèces</TableHead>
           <TableHead className="text-right">PdB</TableHead>
           <TableHead className="text-right">Total</TableHead>
           <TableHead>Conso.</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {data.map((r, i) => {
+        {data.map((r) => {
           const dominant = dominantReceiptMethod(
             r.card_total,
             r.cash_total,
@@ -838,11 +835,11 @@ function ReceiptsTable({
             )}
             onClick={() => onRowClick(r)}
           >
-            <TableCell className="text-muted-foreground tabular-nums">
-              {startIndex + i + 1}
-            </TableCell>
             <TableCell className="whitespace-nowrap">
-              {formatDate(r.created_at)}
+              <div>{formatDate(r.created_at)}</div>
+              <div className="text-xs text-muted-foreground tabular-nums">
+                {formatTime(r.created_at)}
+              </div>
             </TableCell>
             <TableCell>
               <CustomerLink id={r.customer_id} name={r.customer_name} />
@@ -853,7 +850,6 @@ function ReceiptsTable({
                 name={r.establishment_name}
               />
             </TableCell>
-            <TableCell>{r.employee_name}</TableCell>
             <TableCell className="text-right">
               {r.card_total > 0 ? (
                 <Badge
@@ -861,18 +857,6 @@ function ReceiptsTable({
                   className={cn(getPaymentMethodConfig("card").badgeClass)}
                 >
                   <Cur value={r.card_total} />
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </TableCell>
-            <TableCell className="text-right">
-              {r.cash_total > 0 ? (
-                <Badge
-                  variant="outline"
-                  className={cn(getPaymentMethodConfig("cash").badgeClass)}
-                >
-                  <Cur value={r.cash_total} />
                 </Badge>
               ) : (
                 <span className="text-muted-foreground">—</span>

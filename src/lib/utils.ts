@@ -29,6 +29,12 @@ export function formatDateTime(date: string | Date): string {
   }).format(new Date(date));
 }
 
+export function formatTime(date: string | Date): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeStyle: "short",
+  }).format(new Date(date));
+}
+
 export function getPeriodIdentifier(
   periodType: "weekly" | "monthly" | "yearly",
   date: Date = new Date()
