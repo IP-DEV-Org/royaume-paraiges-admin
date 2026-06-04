@@ -56,6 +56,7 @@ import {
   Shield,
   IdCard,
   Trash2,
+  ChevronRight,
 } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import { UserQrCode } from "@/components/user-qr-code";
@@ -1131,21 +1132,44 @@ export default function UserDetailPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {gains.map((gain) => (
-                        <TableRow key={gain.id}>
+                      {gains.map((gain) => {
+                        const questLink =
+                          gain.source_type === "bonus_cashback_quest" && gain.quest
+                            ? gain.quest
+                            : null;
+                        return (
+                        <TableRow
+                          key={gain.id}
+                          className={
+                            questLink ? "cursor-pointer hover:bg-muted/50" : undefined
+                          }
+                          onClick={
+                            questLink
+                              ? () => router.push(`/quests/${questLink.id}`)
+                              : undefined
+                          }
+                        >
                           <TableCell className="font-mono text-sm">#G{gain.id}</TableCell>
                           <TableCell>
                             {gain.source_type ? (
-                              <Badge
-                                variant={gain.source_type === "receipt" ? "default" : "secondary"}
-                                className={
-                                  gain.source_type !== "receipt"
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : undefined
-                                }
-                              >
-                                {sourceTypeLabels[gain.source_type] || gain.source_type}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={gain.source_type === "receipt" ? "default" : "secondary"}
+                                  className={
+                                    gain.source_type !== "receipt"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : undefined
+                                  }
+                                >
+                                  {sourceTypeLabels[gain.source_type] || gain.source_type}
+                                </Badge>
+                                {questLink && (
+                                  <span className="inline-flex items-center gap-0.5 text-sm font-medium text-foreground">
+                                    {questLink.name}
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">&mdash;</span>
                             )}
@@ -1178,7 +1202,8 @@ export default function UserDetailPage() {
                             {formatDateTime(gain.created_at)}
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
 

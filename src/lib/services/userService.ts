@@ -447,6 +447,7 @@ export interface UserGain {
   establishment_id: number | null;
   coupon_id: number | null;
   establishment?: { id: number; title: string } | null;
+  quest?: { id: number; name: string } | null;
 }
 
 export async function getUserGains(
@@ -483,7 +484,60 @@ export async function getUserGains(
     throw error;
   }
 
-  return { data: (data || []) as UserGain[], count: count || 0 };
+  const gains = (data || []) as UserGain[];
+
+  // Rattache la quête à l'origine des gains de source "bonus_cashback_quest".
+  // La table `gains` n'a pas de quest_id : le crédit PdB/XP d'une quête est écrit
+  // au même instant que sa ligne `quest_completion_logs` (completed_at ===
+  // created_at, à la microseconde). On relie donc par (customer_id, timestamp),
+  // en départageant par montant si deux quêtes sont récompensées simultanément.
+  const questGains = gains.filter((g) => g.source_type === "bonus_cashback_quest");
+  if (questGains.length > 0) {
+    const timestamps = Array.from(new Set(questGains.map((g) => g.created_at)));
+    const { data: logs, error: logsError } = await supabase
+      .from("quest_completion_logs")
+      .select(
+        "completed_at, bonus_cashback_awarded, bonus_xp_awarded, quest:quests!quest_id(id, name)"
+      )
+      .eq("customer_id", userId)
+      .in("completed_at", timestamps);
+
+    if (logsError) {
+      console.error("Error fetching quest links for gains:", logsError);
+    } else if (logs) {
+      const byTimestamp = new Map<string, QuestCompletionLogRow[]>();
+      for (const log of logs as unknown as QuestCompletionLogRow[]) {
+        const bucket = byTimestamp.get(log.completed_at) ?? [];
+        bucket.push(log);
+        byTimestamp.set(log.completed_at, bucket);
+      }
+
+      for (const gain of questGains) {
+        const candidates = byTimestamp.get(gain.created_at) ?? [];
+        if (candidates.length === 0) continue;
+        const match =
+          candidates.length === 1
+            ? candidates[0]
+            : candidates.find(
+                (l) =>
+                  l.bonus_cashback_awarded === gain.cashback_money &&
+                  l.bonus_xp_awarded === gain.xp
+              ) ?? candidates[0];
+        if (match?.quest) {
+          gain.quest = { id: match.quest.id, name: match.quest.name };
+        }
+      }
+    }
+  }
+
+  return { data: gains, count: count || 0 };
+}
+
+interface QuestCompletionLogRow {
+  completed_at: string;
+  bonus_cashback_awarded: number | null;
+  bonus_xp_awarded: number | null;
+  quest: { id: number; name: string } | null;
 }
 
 export interface UserQuestProgress {
