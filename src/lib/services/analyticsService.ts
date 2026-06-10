@@ -1112,11 +1112,18 @@ export interface TimelineGlobalRow {
 /**
  * Métriques par établissement et journée fiscale (paiements PdB, nb
  * transactions, PdB organiques). `establishmentIds` vide ou null = tous.
+ *
+ * `includeCashpad` (défaut `false`) pilote le calcul des colonnes « selon
+ * Cashpad » (`euro_cashpad_*`, `pdb_cashpad_cents`). Désactivé, la RPC saute
+ * entièrement l'agrégation sur `cashpad_receipts_snapshot` (454 MB / JSONB) et
+ * renvoie `NULL` pour ces colonnes → chargement quasi instantané. Activé, la
+ * comparaison Cashpad ↔ Royaume est calculée (plus lent, à la demande).
  */
 export async function getAnalyticsTimeline(
   startDate: string,
   endDate: string,
-  establishmentIds?: number[]
+  establishmentIds?: number[],
+  includeCashpad = false
 ): Promise<TimelineRow[]> {
   const supabase = createClient();
 
@@ -1125,6 +1132,7 @@ export async function getAnalyticsTimeline(
     p_end_date: endDate,
     p_establishment_ids:
       establishmentIds && establishmentIds.length > 0 ? establishmentIds : null,
+    p_include_cashpad: includeCashpad,
   });
 
   if (error) throw error;

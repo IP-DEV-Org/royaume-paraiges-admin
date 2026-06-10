@@ -117,6 +117,7 @@ export const analyticsKeys = {
     startDate: string;
     endDate: string;
     establishmentIds: number[];
+    includeCashpad: boolean;
   }) =>
     [
       ...analyticsKeys.all,
@@ -126,6 +127,7 @@ export const analyticsKeys = {
         endDate: filters.endDate,
         // trié pour une identité de clé stable quel que soit l'ordre de sélection
         establishmentIds: [...filters.establishmentIds].sort((a, b) => a - b),
+        includeCashpad: filters.includeCashpad,
       },
     ] as const,
   timelineGlobal: (filters: { startDate: string; endDate: string }) =>

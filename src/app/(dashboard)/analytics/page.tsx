@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 import { analyticsKeys } from "@/lib/queries/keys";
 import {
@@ -26,6 +27,7 @@ import {
   TimelineTable,
   type TimelineCellMetric,
 } from "@/components/analytics/timeline-table";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Jour calendaire suivant (YYYY-MM-DD) — borne de fin exclusive pour le drilldown. */
 function nextDay(dateISO: string): string {
@@ -47,6 +49,9 @@ export default function AnalyticsPage() {
   const [date, setDate] = useState<string>(() => todayUtcISO());
   const [selectedEstablishments, setSelectedEstablishments] = useState<number[]>([]);
   const [estFilterOpen, setEstFilterOpen] = useState(false);
+  // Comparaison Cashpad : calcul lourd (agrégation snapshot 454 MB) → désactivé
+  // par défaut, activable à la demande via la checkbox.
+  const [showCashpad, setShowCashpad] = useState(false);
 
   // Hauteur de la barre de filtres → offset auquel figer l'entête du tableau.
   const filterBarRef = useRef<HTMLDivElement>(null);
@@ -97,8 +102,10 @@ export default function AnalyticsPage() {
       startDate,
       endDate,
       establishmentIds: selectedEstablishments,
+      includeCashpad: showCashpad,
     }),
-    queryFn: () => getAnalyticsTimeline(startDate, endDate, selectedEstablishments),
+    queryFn: () =>
+      getAnalyticsTimeline(startDate, endDate, selectedEstablishments, showCashpad),
     placeholderData: keepPreviousData,
   });
 
@@ -177,6 +184,22 @@ export default function AnalyticsPage() {
           open={estFilterOpen}
           onOpenChange={setEstFilterOpen}
         />
+
+        {/* Comparaison Cashpad — calcul lourd, activable à la demande. */}
+        <label
+          className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
+          title="Compare les encaissements Cashpad aux receipts Royaume. Calcul plus lent : à activer ponctuellement."
+        >
+          <Checkbox
+            checked={showCashpad}
+            onCheckedChange={(v) => setShowCashpad(v === true)}
+          />
+          <span>Montant Cashpad hors Royaume</span>
+          {showCashpad && timelineQuery.isFetching && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          )}
+        </label>
+
         <div className="ml-auto">
           <TimelinePeriodRange
             mode={periodMode}
@@ -195,6 +218,7 @@ export default function AnalyticsPage() {
           loading={isLoading}
           onCellClick={openTimelineDrilldown}
           stickyHeaderTop={stickyTop}
+          showCashpad={showCashpad}
         />
       </div>
 
