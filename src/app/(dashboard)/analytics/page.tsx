@@ -19,10 +19,10 @@ import {
 } from "@/components/analytics/establishment-multi-filter";
 import {
   getPeriodBounds,
-  TimelinePeriodRange,
+  PeriodRange,
   todayUtcISO,
   type PeriodMode,
-} from "@/components/analytics/timeline-period-range";
+} from "@/components/period-range";
 import {
   TimelineTable,
   type TimelineCellMetric,
@@ -201,7 +201,7 @@ export default function AnalyticsPage() {
         </label>
 
         <div className="ml-auto">
-          <TimelinePeriodRange
+          <PeriodRange
             mode={periodMode}
             date={date}
             onModeChange={setPeriodMode}
