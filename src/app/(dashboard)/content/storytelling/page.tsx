@@ -39,6 +39,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   Loader2,
   Pencil,
@@ -83,6 +85,14 @@ interface RankForm {
   min_level: string;
   max_level: string;
   sort_order: string;
+}
+
+interface RankPayload {
+  name: string;
+  slug: string;
+  min_level: number;
+  max_level: number;
+  sort_order: number;
 }
 
 const emptyLevelForm: LevelForm = {
@@ -142,6 +152,11 @@ export default function StorytellingPage() {
   const [savingRank, setSavingRank] = useState(false);
   const [deleteRankTarget, setDeleteRankTarget] = useState<Rank | null>(null);
   const [deletingRank, setDeletingRank] = useState(false);
+  const [overlapConfirm, setOverlapConfirm] = useState<{
+    payload: RankPayload;
+    overlap: Rank;
+    mode: "create" | "edit";
+  } | null>(null);
 
   const rankOverlapWarning = useMemo(() => {
     const sorted = [...ranks].sort((a, b) => a.min_level - b.min_level);
@@ -287,13 +302,7 @@ export default function StorytellingPage() {
     setCreatingRank(true);
   };
 
-  const validateRankForm = (): {
-    name: string;
-    slug: string;
-    min_level: number;
-    max_level: number;
-    sort_order: number;
-  } | null => {
+  const validateRankForm = (): RankPayload | null => {
     const name = rankForm.name.trim();
     const slug = rankForm.slug.trim() || slugify(name);
     const minLevel = parseInt(rankForm.min_level, 10);
@@ -321,18 +330,6 @@ export default function StorytellingPage() {
       return null;
     }
 
-    // Chevauchement avec les autres rangs (alerte non bloquante).
-    const others = ranks.filter((r) => r.id !== editingRank?.id);
-    const overlap = others.find(
-      (r) => minLevel <= r.max_level && maxLevel >= r.min_level,
-    );
-    if (overlap) {
-      const ok = window.confirm(
-        `Chevauchement avec « ${overlap.name} » (${overlap.min_level}-${overlap.max_level}). Continuer ?`,
-      );
-      if (!ok) return null;
-    }
-
     return {
       name,
       slug,
@@ -342,11 +339,16 @@ export default function StorytellingPage() {
     };
   };
 
-  const handleSaveRank = async () => {
-    if (!editingRank) return;
-    const payload = validateRankForm();
-    if (!payload) return;
+  // Chevauchement avec les autres rangs (alerte non bloquante).
+  const findRankOverlap = (payload: RankPayload): Rank | undefined => {
+    const others = ranks.filter((r) => r.id !== editingRank?.id);
+    return others.find(
+      (r) => payload.min_level <= r.max_level && payload.max_level >= r.min_level,
+    );
+  };
 
+  const submitSaveRank = async (payload: RankPayload) => {
+    if (!editingRank) return;
     setSavingRank(true);
     try {
       await updateRank(editingRank.id, payload);
@@ -361,10 +363,7 @@ export default function StorytellingPage() {
     }
   };
 
-  const handleCreateRank = async () => {
-    const payload = validateRankForm();
-    if (!payload) return;
-
+  const submitCreateRank = async (payload: RankPayload) => {
     setSavingRank(true);
     try {
       await createRank(payload);
@@ -377,6 +376,31 @@ export default function StorytellingPage() {
     } finally {
       setSavingRank(false);
     }
+  };
+
+  const handleSaveRank = async () => {
+    if (!editingRank) return;
+    const payload = validateRankForm();
+    if (!payload) return;
+
+    const overlap = findRankOverlap(payload);
+    if (overlap) {
+      setOverlapConfirm({ payload, overlap, mode: "edit" });
+      return;
+    }
+    await submitSaveRank(payload);
+  };
+
+  const handleCreateRank = async () => {
+    const payload = validateRankForm();
+    if (!payload) return;
+
+    const overlap = findRankOverlap(payload);
+    if (overlap) {
+      setOverlapConfirm({ payload, overlap, mode: "create" });
+      return;
+    }
+    await submitCreateRank(payload);
   };
 
   const handleDeleteRank = async () => {
@@ -412,21 +436,17 @@ export default function StorytellingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Storytelling</h1>
-          <p className="text-muted-foreground">
-            Gérez les rangs et les textes narratifs affichés sur la homepage
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Storytelling"
+        description="Gérez les rangs et les textes narratifs affichés sur la homepage"
+      />
 
       {/* Card Rangs */}
       <Card>
         <CardHeader className="flex flex-row items-start justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Crown className="h-5 w-5" />
+              <Crown className="h-5 w-5" aria-hidden="true" />
               Rangs
             </CardTitle>
             <CardDescription>
@@ -436,14 +456,14 @@ export default function StorytellingPage() {
             </CardDescription>
           </div>
           <Button onClick={openCreateRank} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Ajouter un rang
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {rankOverlapWarning && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
               <span>{rankOverlapWarning}</span>
             </div>
           )}
@@ -489,9 +509,10 @@ export default function StorytellingPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label={`Modifier le rang « ${rank.name} »`}
                         onClick={() => openEditRank(rank)}
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -506,7 +527,7 @@ export default function StorytellingPage() {
         <CardHeader className="flex flex-row items-start justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
+              <BookOpen className="h-5 w-5" aria-hidden="true" />
               Lore par niveau
             </CardTitle>
             <CardDescription>
@@ -514,7 +535,7 @@ export default function StorytellingPage() {
             </CardDescription>
           </div>
           <Button onClick={openCreateLevel} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Ajouter un niveau
           </Button>
         </CardHeader>
@@ -576,9 +597,10 @@ export default function StorytellingPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label={`Modifier le niveau ${level.level}`}
                         onClick={() => openEditLevel(level)}
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -678,7 +700,7 @@ export default function StorytellingPage() {
                 size="sm"
                 onClick={() => setDeleteLevelTarget(editingLevel)}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                 Supprimer
               </Button>
             )}
@@ -691,7 +713,7 @@ export default function StorytellingPage() {
                 disabled={savingLevel}
               >
                 {savingLevel && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 )}
                 {creatingLevel ? "Créer" : "Enregistrer"}
               </Button>
@@ -795,7 +817,7 @@ export default function StorytellingPage() {
                 size="sm"
                 onClick={() => setDeleteRankTarget(editingRank)}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                 Supprimer
               </Button>
             )}
@@ -808,7 +830,7 @@ export default function StorytellingPage() {
                 disabled={savingRank}
               >
                 {savingRank && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 )}
                 {creatingRank ? "Créer" : "Enregistrer"}
               </Button>
@@ -816,6 +838,29 @@ export default function StorytellingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation chevauchement de rangs */}
+      <ConfirmDialog
+        open={!!overlapConfirm}
+        onOpenChange={(open) => !open && setOverlapConfirm(null)}
+        title="Chevauchement de rangs"
+        description={
+          overlapConfirm
+            ? `Chevauchement avec « ${overlapConfirm.overlap.name} » (${overlapConfirm.overlap.min_level}-${overlapConfirm.overlap.max_level}). Continuer ?`
+            : ""
+        }
+        confirmLabel="Continuer"
+        onConfirm={async () => {
+          if (!overlapConfirm) return;
+          const { payload, mode } = overlapConfirm;
+          setOverlapConfirm(null);
+          if (mode === "edit") {
+            await submitSaveRank(payload);
+          } else {
+            await submitCreateRank(payload);
+          }
+        }}
+      />
 
       {/* Confirmation suppression niveau */}
       <AlertDialog
@@ -840,7 +885,7 @@ export default function StorytellingPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deletingLevel && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
               Supprimer
             </AlertDialogAction>
@@ -872,7 +917,7 @@ export default function StorytellingPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deletingRank && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
               Supprimer
             </AlertDialogAction>
