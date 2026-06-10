@@ -90,7 +90,10 @@ function AlertsSection() {
     return (
       <Card className="border-emerald-500/40 bg-emerald-500/5">
         <CardContent className="flex items-center gap-3 py-4">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400"
+            aria-hidden="true"
+          />
           <div>
             <p className="font-medium">Tout va bien</p>
             <p className="text-sm text-muted-foreground">
@@ -106,7 +109,10 @@ function AlertsSection() {
     <Card className="border-amber-500/40 bg-amber-500/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertTriangle
+            className="h-4 w-4 text-amber-600 dark:text-amber-400"
+            aria-hidden="true"
+          />
           {alerts.length} alerte{alerts.length > 1 ? "s" : ""} à traiter
         </CardTitle>
       </CardHeader>
@@ -125,7 +131,7 @@ function AlertsSection() {
             </div>
             <div className="flex items-center gap-3">
               <Badge variant="destructive">{alert.count}</Badge>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </div>
           </Link>
         ))}
@@ -172,7 +178,7 @@ function TrendBadge({ current, previous }: { current: number; previous: number }
         : "text-muted-foreground";
   return (
     <span className={cn("inline-flex items-center gap-1 text-xs", color)}>
-      <Icon className="h-3 w-3" />
+      <Icon className="h-3 w-3" aria-hidden="true" />
       {pct === null ? "—" : `${pct > 0 ? "+" : ""}${pct}%`}
     </span>
   );
@@ -270,7 +276,7 @@ function ActivityKpiCard({ kpi }: { kpi: ActivityKpi }) {
     <Card className={kpi.href ? "transition-colors hover:bg-accent" : ""}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{kpi.label}</CardTitle>
-        <kpi.icon className="h-4 w-4 text-muted-foreground" />
+        <kpi.icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{kpi.format(kpi.current)}</div>
@@ -305,7 +311,7 @@ function GameStateSection() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-muted-foreground" />
+                <Target className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 Quêtes en cours
               </CardTitle>
               <CardDescription>
@@ -354,7 +360,7 @@ function GameStateSection() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-muted-foreground" />
+                <Trophy className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 Prochaine distribution
               </CardTitle>
               <CardDescription>
@@ -378,7 +384,7 @@ function GameStateSection() {
                   <Link href="/rewards/distribute">
                     <Button variant="outline" size="sm" className="w-full justify-between">
                       Distribuer
-                      <ArrowRight className="h-4 w-4" />
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </Link>
                 </div>
@@ -425,7 +431,7 @@ function FinancialHealthSection() {
               <CardTitle className="text-sm font-medium">
                 Dette PdB en circulation
               </CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
+              <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{formatCurrency(data.pdbDebt)}</div>
@@ -438,7 +444,7 @@ function FinancialHealthSection() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Flux net 7j</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <Activity className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </CardHeader>
             <CardContent>
               <div
@@ -465,7 +471,7 @@ function FinancialHealthSection() {
               <CardTitle className="text-sm font-medium">
                 Part PdB dans le CA
               </CardTitle>
-              <Coins className="h-4 w-4 text-muted-foreground" />
+              <Coins className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{data.pdbShareOfRevenue7d}%</div>

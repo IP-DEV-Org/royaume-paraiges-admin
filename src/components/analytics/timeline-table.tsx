@@ -38,14 +38,16 @@ interface MetricConfig {
   hint: string;
   /** `currency` = montant d'un champ ; `diff` = écart Cashpad − Royaume calculé. */
   kind: "currency" | "diff";
+  /** Bloc logique — un trait épais sépare deux blocs consécutifs visibles. */
+  block: "cashpad_other" | "euros" | "pdb" | "generation";
   /** Présent → cellule cliquable (ouvre le drilldown). */
   metric?: TimelineCellMetric;
   /** Champ affiché pour `kind: "currency"`. */
   field?: CurrencyField;
   /** Paire (Cashpad, Royaume) pour `kind: "diff"` → écart = Cashpad − Royaume. */
   diff?: { cashpad: CurrencyField; royaume: CurrencyField };
-  /** Trait épais avant cette ligne (séparation de blocs). */
-  separatorBefore?: boolean;
+  /** Donnée issue de l'agrégation Cashpad → masquée tant que la comparaison est off. */
+  cashpad?: boolean;
 }
 
 const METRICS: MetricConfig[] = [
@@ -55,7 +57,9 @@ const METRICS: MetricConfig[] = [
     label: "Euros Cashpad",
     hint: "Montant des paiements Cashpad sans lien avec le Royaume (tous modes sauf « Euros Royaume » et « Paraiges de Bronze ») : Euros simples, CB, Espèces, Ticket resto, Virement…",
     kind: "currency",
+    block: "cashpad_other",
     field: "euro_cashpad_other_cents",
+    cashpad: true,
   },
   // Bloc 1 — Euros Royaume (euros payés par les membres Royaume)
   {
@@ -63,14 +67,16 @@ const METRICS: MetricConfig[] = [
     label: "Euros Royaume — selon Cashpad",
     hint: "Montant total des paiements enregistrés en caisse Cashpad avec le mode de paiement « Euros Royaume »",
     kind: "currency",
+    block: "euros",
     field: "euro_cashpad_cents",
-    separatorBefore: true,
+    cashpad: true,
   },
   {
     key: "euro_royaume",
     label: "Euros Royaume — selon Royaume",
     hint: "Montant en euros (carte + espèces, hors PdB) des receipts scannés avec l'application Scanner du Royaume",
     kind: "currency",
+    block: "euros",
     metric: "euro",
     field: "euro_royaume_cents",
   },
@@ -79,7 +85,9 @@ const METRICS: MetricConfig[] = [
     label: "Différence (Cashpad − Royaume)",
     hint: "Écart entre les Euros Royaume encaissés côté Cashpad et les euros scannés côté Royaume. Vert = aucun écart, ambre = divergence à investiguer.",
     kind: "diff",
+    block: "euros",
     diff: { cashpad: "euro_cashpad_cents", royaume: "euro_royaume_cents" },
+    cashpad: true,
   },
   // Bloc 2 — Paiements en Paraiges de Bronze (cashback)
   {
@@ -87,14 +95,16 @@ const METRICS: MetricConfig[] = [
     label: "Paiements PdB — selon Cashpad",
     hint: "Montant total des paiements enregistrés en caisse Cashpad avec le mode de paiement « Paraiges de Bronze »",
     kind: "currency",
+    block: "pdb",
     field: "pdb_cashpad_cents",
-    separatorBefore: true,
+    cashpad: true,
   },
   {
     key: "pdb_royaume",
     label: "Paiements PdB — selon Royaume",
     hint: "Montant des receipts scannés réglés en Paraiges de Bronze (cashback) côté Royaume (1 PdB = 0,01 €)",
     kind: "currency",
+    block: "pdb",
     metric: "pdb_payment",
     field: "pdb_royaume_cents",
   },
@@ -103,7 +113,9 @@ const METRICS: MetricConfig[] = [
     label: "Différence (Cashpad − Royaume)",
     hint: "Écart entre les PdB encaissés côté Cashpad et les paiements PdB scannés côté Royaume. Vert = aucun écart, ambre = divergence à investiguer.",
     kind: "diff",
+    block: "pdb",
     diff: { cashpad: "pdb_cashpad_cents", royaume: "pdb_royaume_cents" },
+    cashpad: true,
   },
   // Bloc 3 — Génération de Paraiges de Bronze
   {
@@ -111,15 +123,16 @@ const METRICS: MetricConfig[] = [
     label: "PdB organiques générés",
     hint: "Paraiges de Bronze gagnés en dépensant (cashback organique, hors quêtes) — 1 PdB = 0,01 €",
     kind: "currency",
+    block: "generation",
     metric: "organic",
     field: "pdb_organic_cents",
-    separatorBefore: true,
   },
   {
     key: "quest",
     label: "PdB gains générés",
     hint: "Paraiges de Bronze gagnés via les quêtes, rattachés à l'établissement du dernier receipt déclencheur (1 PdB = 0,01 €)",
     kind: "currency",
+    block: "generation",
     field: "pdb_quest_cents",
   },
 ];
@@ -147,6 +160,9 @@ function formatDiff(cents: number): string {
   return `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`;
 }
 
+/** Métrique enrichie d'un séparateur de bloc calculé selon les lignes visibles. */
+type VisibleMetric = MetricConfig & { separatorBefore: boolean };
+
 interface TimelineTableProps {
   rows: TimelineRow[];
   columns: string[];
@@ -154,6 +170,8 @@ interface TimelineTableProps {
   onCellClick: (row: TimelineRow, metric: TimelineCellMetric) => void;
   /** Décalage (px) auquel figer l'entête : hauteur de la barre de filtres. */
   stickyHeaderTop?: number;
+  /** Affiche les lignes de comparaison Cashpad (calcul lourd, off par défaut). */
+  showCashpad?: boolean;
 }
 
 export function TimelineTable({
@@ -162,8 +180,17 @@ export function TimelineTable({
   loading,
   onCellClick,
   stickyHeaderTop = 0,
+  showCashpad = false,
 }: TimelineTableProps) {
   const headerScrollRef = useRef<HTMLDivElement>(null);
+
+  // Lignes visibles selon le toggle Cashpad ; le trait de séparation tombe à
+  // chaque changement de bloc entre deux lignes effectivement affichées.
+  const shownMetrics = METRICS.filter((m) => showCashpad || !m.cashpad);
+  const visibleMetrics: VisibleMetric[] = shownMetrics.map((m, i) => ({
+    ...m,
+    separatorBefore: i > 0 && m.block !== shownMetrics[i - 1]?.block,
+  }));
 
   // Le corps pilote l'entête : on mirroir le scroll horizontal.
   const handleBodyScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -302,6 +329,7 @@ export function TimelineTable({
                 title={group.title}
                 byDate={group.byDate}
                 columns={columns}
+                metrics={visibleMetrics}
                 renderCell={renderCell}
                 onCellClick={onCellClick}
                 isFirst={gi === 0}
@@ -318,6 +346,7 @@ function GroupRows({
   title,
   byDate,
   columns,
+  metrics,
   renderCell,
   onCellClick,
   isFirst,
@@ -325,6 +354,7 @@ function GroupRows({
   title: string;
   byDate: Map<string, TimelineRow>;
   columns: string[];
+  metrics: VisibleMetric[];
   renderCell: (
     row: TimelineRow | undefined,
     m: MetricConfig
@@ -355,7 +385,7 @@ function GroupRows({
         ))}
       </tr>
 
-      {METRICS.map((m, idx) => {
+      {metrics.map((m, idx) => {
         const isDiff = m.kind === "diff";
         // Lignes de métriques en blanc ; seules les lignes de différence (delta)
         // ont un fond différencié.

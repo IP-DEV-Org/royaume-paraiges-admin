@@ -49,7 +49,12 @@ import {
   Square,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/stat-card";
+import { formatDate } from "@/lib/utils";
 import { getEstablishments } from "@/lib/services/contentService";
 import {
   listReconciliations,
@@ -171,7 +176,7 @@ function formatPeriodLabel(
   startDate: string,
   endDate: string,
 ): string {
-  if (mode === "day") return new Date(`${startDate}T00:00:00Z`).toLocaleDateString("fr-FR");
+  if (mode === "day") return formatDate(`${startDate}T00:00:00Z`);
   const fmt = (iso: string) =>
     new Date(`${iso}T00:00:00Z`).toLocaleDateString("fr-FR", {
       day: "2-digit",
@@ -191,6 +196,9 @@ function formatEuro(cents: number | null | undefined): string {
   return `${(cents / 100).toFixed(2)} €`;
 }
 
+// Formats volontairement spécifiques à la réconciliation (les secondes sont
+// load-bearing pour comparer Royaume ↔ Cashpad) — ne pas remplacer par les
+// helpers de @/lib/utils, qui n'affichent pas les secondes.
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("fr-FR", {
@@ -199,15 +207,6 @@ function formatDateTime(iso: string | null | undefined): string {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  });
-}
-
-function formatDateOnly(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
   });
 }
 
@@ -224,7 +223,7 @@ function DateTimeCell({ iso }: { iso: string | null | undefined }) {
   if (!iso) return <span className="text-muted-foreground">—</span>;
   return (
     <div className="leading-tight">
-      <div className="text-sm">{formatDateOnly(iso)}</div>
+      <div className="text-sm">{formatDate(iso)}</div>
       <div className="text-xs text-muted-foreground tabular-nums">{formatTimeOnly(iso)}</div>
     </div>
   );
@@ -278,38 +277,6 @@ function getCustomerLabel(
     `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() ||
     customer.email ||
     customer.id.slice(0, 8)
-  );
-}
-
-function StatusBadge({ status }: { status: ReconciliationRow["status"] }) {
-  if (status === "matched") {
-    return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400">
-        <CheckCircle2 className="mr-1 h-3 w-3" />
-        Matché
-      </Badge>
-    );
-  }
-  if (status === "orphan_royaume") {
-    return (
-      <Badge className="bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400">
-        <AlertTriangle className="mr-1 h-3 w-3" />
-        Orphelin Royaume
-      </Badge>
-    );
-  }
-  if (status === "excluded_cashback") {
-    return (
-      <Badge className="bg-slate-500/15 text-slate-700 hover:bg-slate-500/20 dark:text-slate-300">
-        100% PdB
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="bg-violet-500/15 text-violet-700 hover:bg-violet-500/20 dark:text-violet-400">
-      <HelpCircle className="mr-1 h-3 w-3" />
-      Ambigu
-    </Badge>
   );
 }
 
@@ -424,8 +391,11 @@ function ReconciliationDetailsDialog({
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
                 Ticket Cashpad
               </h3>
-              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                Aucun ticket Cashpad trouvé dans la fenêtre ±5 min.
+              <div className="rounded-md border border-dashed">
+                <EmptyState
+                  title="Aucun ticket Cashpad trouvé dans la fenêtre ±5 min."
+                  className="py-4"
+                />
               </div>
             </section>
           )}
@@ -534,7 +504,7 @@ function ReconciliationDetailsDialog({
                 onClose();
               }}
             >
-              <Search className="mr-1 h-4 w-4" />
+              <Search className="mr-1 h-4 w-4" aria-hidden="true" />
               {row.status === "orphan_royaume" ? "Chercher un match" : "Arbitrer"}
             </Button>
           )}
@@ -739,15 +709,24 @@ function ManualLinkDialog({ receipt, onClose }: ManualLinkDialogProps) {
               </TableBody>
             </Table>
           ) : (
-            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              {isAmbiguous
-                ? "Aucun candidat enregistré pour ce receipt — données de matching incohérentes."
-                : (
-                  <>
-                    Aucun ticket Cashpad trouvé sur ±{windowMinutes} min avec le même montant et établissement.
-                    {windowMinutes < WINDOW_MAX_MIN && " Élargis la fenêtre avec +."}
-                  </>
-                )}
+            <div className="rounded-md border border-dashed">
+              {isAmbiguous ? (
+                <EmptyState
+                  title="Aucun candidat enregistré pour ce receipt"
+                  description="Données de matching incohérentes."
+                  className="py-6"
+                />
+              ) : (
+                <EmptyState
+                  title={`Aucun ticket Cashpad trouvé sur ±${windowMinutes} min avec le même montant et établissement.`}
+                  description={
+                    windowMinutes < WINDOW_MAX_MIN
+                      ? "Élargis la fenêtre avec +."
+                      : undefined
+                  }
+                  className="py-6"
+                />
+              )}
             </div>
           )}
         </div>
@@ -870,6 +849,12 @@ export default function ReconciliationPage() {
   const [linkingReceipt, setLinkingReceipt] = useState<ReconciliationRow | null>(null);
   const [detailRow, setDetailRow] = useState<ReconciliationRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+  const [confirmGlobalOpen, setConfirmGlobalOpen] = useState(false);
+  const [globalRunRange, setGlobalRunRange] = useState<{
+    firstDate: string;
+    lastDate: string;
+    days: number;
+  } | null>(null);
 
   const toggleStatusFilter = (status: NonNullable<StatusFilter>) => {
     setStatusFilter((prev) => (prev === status ? null : status));
@@ -962,9 +947,8 @@ export default function ReconciliationPage() {
         new Date(`${firstDate}T00:00:00Z`).getTime()) /
         86_400_000,
     ) + 1;
-    const confirmMsg = `Lancer la réconciliation globale ${firstDate} → ${lastDate} (${days} jours) ?\n\nTous les établissements seront traités, indépendamment du filtre. Cela peut prendre plusieurs minutes.`;
-    if (!window.confirm(confirmMsg)) return;
-    await runReconciliation(firstDate, lastDate, { ignoreEstablishment: true });
+    setGlobalRunRange({ firstDate, lastDate, days });
+    setConfirmGlobalOpen(true);
   };
 
   const handleStop = () => {
@@ -984,18 +968,15 @@ export default function ReconciliationPage() {
 
   return (
     <div className="flex h-full flex-col gap-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Réconciliation Cashpad</h1>
-          <p className="text-muted-foreground">
-            Recoupe chaque receipt Royaume avec son ticket Cashpad. Les receipts sans match côté
-            caisse sont des anomalies à investiguer.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/reconciliation/health">Santé du matching →</Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Réconciliation Cashpad"
+        description="Recoupe chaque receipt Royaume avec son ticket Cashpad. Les receipts sans match côté caisse sont des anomalies à investiguer."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/reconciliation/health">Santé du matching →</Link>
+          </Button>
+        }
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
         <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">
@@ -1036,7 +1017,7 @@ export default function ReconciliationPage() {
                     onClick={() => setDate(shiftPeriod(date, periodMode, -1))}
                     aria-label="Période précédente"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   </Button>
                   {periodMode === "day" && (
                     <Input
@@ -1081,7 +1062,7 @@ export default function ReconciliationPage() {
                     disabled={isPeriodAtMax(date, periodMode)}
                     aria-label="Période suivante"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
                 <p className="px-1 text-xs text-muted-foreground">
@@ -1110,13 +1091,13 @@ export default function ReconciliationPage() {
                   variant="destructive"
                   className="w-full"
                 >
-                  <Square className="mr-2 h-4 w-4" />
+                  <Square className="mr-2 h-4 w-4" aria-hidden="true" />
                   Stopper
                 </Button>
               ) : (
                 <div className="space-y-2">
                   <Button onClick={handleRun} className="w-full">
-                    <RefreshCw className="mr-2 h-4 w-4" />
+                    <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
                     Relancer sur la période
                   </Button>
                   <Button
@@ -1124,7 +1105,7 @@ export default function ReconciliationPage() {
                     variant="outline"
                     className="w-full"
                   >
-                    <InfinityIcon className="mr-2 h-4 w-4" />
+                    <InfinityIcon className="mr-2 h-4 w-4" aria-hidden="true" />
                     Réconciliation globale
                   </Button>
                 </div>
@@ -1192,14 +1173,14 @@ export default function ReconciliationPage() {
                 <>
                   <StatCard
                     title="Receipts Royaume"
-                    icon={<Scale className="h-4 w-4 text-muted-foreground" />}
+                    icon={<Scale className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
                     value={rows.length}
                     onClick={statusFilter ? () => setStatusFilter(null) : undefined}
                     subtitle={statusFilter ? "Cliquer pour tout afficher" : undefined}
                   />
                   <StatCard
                     title="Matchés"
-                    icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                    icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}
                     value={matched.length}
                     valueClassName="text-emerald-600 dark:text-emerald-400"
                     onClick={() => toggleStatusFilter("matched")}
@@ -1207,7 +1188,7 @@ export default function ReconciliationPage() {
                   />
                   <StatCard
                     title="Orphelins Royaume"
-                    icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+                    icon={<AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" />}
                     value={orphans.length}
                     subtitle="Anomalies à investiguer"
                     valueClassName={
@@ -1218,7 +1199,7 @@ export default function ReconciliationPage() {
                   />
                   <StatCard
                     title="Ambigus"
-                    icon={<HelpCircle className="h-4 w-4 text-violet-500" />}
+                    icon={<HelpCircle className="h-4 w-4 text-violet-500" aria-hidden="true" />}
                     value={ambiguous.length}
                     subtitle="Plusieurs candidats à arbitrer"
                     valueClassName={
@@ -1230,7 +1211,7 @@ export default function ReconciliationPage() {
                   {excludedCashback.length > 0 && (
                     <StatCard
                       title="100% PdB (exclus)"
-                      icon={<Scale className="h-4 w-4 text-slate-500" />}
+                      icon={<Scale className="h-4 w-4 text-slate-500" aria-hidden="true" />}
                       value={excludedCashback.length}
                       subtitle="Paiements cashback, hors scope Cashpad"
                       onClick={() => toggleStatusFilter("excluded_cashback")}
@@ -1249,7 +1230,7 @@ export default function ReconciliationPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
             Orphelins Royaume ({orphans.length})
           </CardTitle>
           <CardDescription>
@@ -1261,8 +1242,12 @@ export default function ReconciliationPage() {
           {reconciliationsQuery.isLoading || isRunning ? (
             <SkeletonRows rows={4} cols={5} />
           ) : orphans.length === 0 ? (
-            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Aucun orphelin. Tous les receipts Royaume ont un ticket Cashpad correspondant.
+            <div className="rounded-md border border-dashed">
+              <EmptyState
+                title="Aucun orphelin sur la période"
+                description="Tous les receipts Royaume ont un ticket Cashpad correspondant."
+                className="py-6"
+              />
             </div>
           ) : (
             <Table>
@@ -1315,7 +1300,7 @@ export default function ReconciliationPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5 text-violet-500" />
+              <HelpCircle className="h-5 w-5 text-violet-500" aria-hidden="true" />
               Ambigus à arbitrer ({ambiguous.length})
             </CardTitle>
             <CardDescription>
@@ -1373,7 +1358,7 @@ export default function ReconciliationPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden="true" />
             Matchés ({matched.length})
           </CardTitle>
           <CardDescription>
@@ -1385,8 +1370,12 @@ export default function ReconciliationPage() {
           {reconciliationsQuery.isLoading || isRunning ? (
             <SkeletonRows rows={6} cols={6} />
           ) : matched.length === 0 ? (
-            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Aucun match. Lance une réconciliation pour cette date.
+            <div className="rounded-md border border-dashed">
+              <EmptyState
+                title="Aucun match sur la période"
+                description="Lance une réconciliation pour cette date."
+                className="py-6"
+              />
             </div>
           ) : (
             <Table>
@@ -1426,6 +1415,33 @@ export default function ReconciliationPage() {
       <ManualLinkDialog
         receipt={linkingReceipt}
         onClose={() => setLinkingReceipt(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmGlobalOpen}
+        onOpenChange={setConfirmGlobalOpen}
+        title="Réconciliation globale"
+        description={
+          globalRunRange ? (
+            <>
+              <p>
+                Lancer la réconciliation globale {globalRunRange.firstDate} →{" "}
+                {globalRunRange.lastDate} ({globalRunRange.days} jours) ?
+              </p>
+              <p className="mt-2">
+                Tous les établissements seront traités, indépendamment du filtre.
+                Cela peut prendre plusieurs minutes.
+              </p>
+            </>
+          ) : null
+        }
+        confirmLabel="Lancer"
+        onConfirm={() => {
+          if (!globalRunRange) return;
+          void runReconciliation(globalRunRange.firstDate, globalRunRange.lastDate, {
+            ignoreEstablishment: true,
+          });
+        }}
       />
     </div>
   );

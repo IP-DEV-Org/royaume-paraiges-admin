@@ -7,6 +7,12 @@ import { User, Menu, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
+import {
+  CommandPalette,
+  CommandPaletteTrigger,
+  useCommandPalette,
+} from "@/components/command-palette";
 
 const roleConfig: Record<string, { label: string; className: string }> = {
   admin: { label: "Admin", className: "bg-violet-100 text-violet-700 border-violet-200" },
@@ -23,6 +29,7 @@ interface HeaderProps {
 export function Header({ mobile = false, onMenuClick }: HeaderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const supabase = createClient();
+  const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -49,8 +56,13 @@ export function Header({ mobile = false, onMenuClick }: HeaderProps) {
   if (mobile) {
     return (
       <header className="flex h-16 items-center justify-between border-b bg-background px-4">
-        <Button variant="ghost" size="icon" onClick={onMenuClick}>
-          <Menu className="h-5 w-5" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onMenuClick}
+          aria-label="Ouvrir le menu"
+        >
+          <Menu className="h-5 w-5" aria-hidden="true" />
         </Button>
         <div className="flex items-center gap-2 font-semibold">
           <Trophy className="h-5 w-5" />
@@ -67,9 +79,11 @@ export function Header({ mobile = false, onMenuClick }: HeaderProps) {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-background px-6">
-      <div />
+    <header className="flex h-16 items-center justify-between gap-4 border-b bg-background px-6">
+      <Breadcrumbs />
       <div className="flex items-center gap-3">
+        <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} />
+        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
         <ThemeToggle />
         <div className="flex items-center gap-2 text-sm">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">

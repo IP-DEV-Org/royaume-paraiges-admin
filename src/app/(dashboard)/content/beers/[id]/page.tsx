@@ -32,13 +32,12 @@ import {
   type Beer,
   type Brewery,
 } from "@/lib/services/contentService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 export default function EditBeerPage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -75,19 +74,11 @@ export default function EditBeerPage() {
           });
           setCurrentImagePath(beer.featured_image);
         } else {
-          toast({
-            variant: "destructive",
-            title: "Erreur",
-            description: "Bière introuvable",
-          });
+          toast.error("Erreur", { description: "Bière introuvable" });
           router.push("/content/beers");
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
-          description: "Impossible de charger la bière",
-        });
+        toast.error("Erreur", { description: "Impossible de charger la bière" });
         router.push("/content/beers");
       } finally {
         setLoadingData(false);
@@ -95,7 +86,7 @@ export default function EditBeerPage() {
     };
 
     fetchData();
-  }, [id, router, toast]);
+  }, [id, router]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -141,12 +132,10 @@ export default function EditBeerPage() {
         featured_image: newImagePath,
       });
 
-      toast({ title: "Bière mise à jour" });
+      toast.success("Bière mise à jour");
       router.push("/content/beers");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de mettre à jour la bière",
       });
     } finally {
@@ -166,8 +155,8 @@ export default function EditBeerPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/content/beers">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+          <Button variant="ghost" size="icon" aria-label="Retour à la liste des bières">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
         </Link>
         <div>
@@ -249,9 +238,10 @@ export default function EditBeerPage() {
                       <button
                         type="button"
                         onClick={handleRemoveNewImage}
+                        aria-label="Retirer la nouvelle image"
                         className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/90"
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-4 w-4" aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -328,7 +318,9 @@ export default function EditBeerPage() {
                 </Button>
               </Link>
               <Button type="submit" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loading && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                )}
                 Enregistrer
               </Button>
             </div>

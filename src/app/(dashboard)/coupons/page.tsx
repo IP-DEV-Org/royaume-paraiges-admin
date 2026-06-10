@@ -21,15 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ChevronDown, ChevronUp, Plus, Ticket } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { getCoupons, type CouponFilters } from "@/lib/services/couponService";
 import { formatPercentage, formatDate } from "@/lib/utils";
 import { couponKeys } from "@/lib/queries/keys";
@@ -126,22 +122,101 @@ export default function CouponsPage() {
   const totalPages = Math.ceil(totalItems / limit);
   const paginatedItems = sorted.slice(page * limit, (page + 1) * limit);
 
+  const columns: DataTableColumn<CouponWithRelations>[] = [
+    {
+      key: "id",
+      header: "ID",
+      sortable: true,
+      sortValue: (item) => item.id,
+      cellClassName: "font-mono text-sm",
+      cell: (item) => <>#{item.id}</>,
+    },
+    {
+      key: "user",
+      header: "Utilisateur",
+      sortable: true,
+      sortValue: (item) =>
+        item.profiles
+          ? `${item.profiles.first_name || ""} ${item.profiles.last_name || ""}`.trim() ||
+            item.profiles.email
+          : null,
+      cell: (item) => (
+        <div>
+          <span className="font-medium">
+            {item.profiles
+              ? `${item.profiles.first_name || ""} ${item.profiles.last_name || ""}`.trim() ||
+                item.profiles.email
+              : "Inconnu"}
+          </span>
+          <p className="text-sm text-muted-foreground">{item.profiles?.email}</p>
+        </div>
+      ),
+    },
+    {
+      key: "percentage",
+      header: "Réduction",
+      sortable: true,
+      sortValue: (item) => item.percentage,
+      cell: (item) =>
+        item.percentage ? (
+          <Badge
+            variant="outline"
+            className="border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-300"
+          >
+            {formatPercentage(item.percentage)}
+          </Badge>
+        ) : (
+          "-"
+        ),
+    },
+    {
+      key: "source",
+      header: "Source",
+      cell: (item) => (
+        <>
+          <span className="text-sm">{getSourceLabel(item.distribution_type)}</span>
+          {item.period_identifier && (
+            <p className="text-xs text-muted-foreground">{item.period_identifier}</p>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "status",
+      header: "Statut",
+      cell: (item) =>
+        item.used ? (
+          <StatusBadge status="used" />
+        ) : isExpired(item.expires_at) ? (
+          <StatusBadge status="expired" label="Expiré" tone="destructive" />
+        ) : (
+          <StatusBadge status="active" />
+        ),
+    },
+    {
+      key: "created_at",
+      header: "Date",
+      sortable: true,
+      sortValue: (item) => item.created_at,
+      cellClassName: "text-sm text-muted-foreground",
+      cell: (item) => formatDate(item.created_at),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Coupons</h1>
-          <p className="text-muted-foreground">
-            Coupons (%) distribués aux utilisateurs.
-          </p>
-        </div>
-        <Link href="/coupons/create">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nouveau coupon
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Coupons"
+        description="Coupons (%) distribués aux utilisateurs."
+        actions={
+          <Link href="/coupons/create">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              Nouveau coupon
+            </Button>
+          </Link>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -173,9 +248,9 @@ export default function CouponsPage() {
             >
               Filtres avancés
               {showAdvanced ? (
-                <ChevronUp className="ml-1 h-4 w-4" />
+                <ChevronUp className="ml-1 h-4 w-4" aria-hidden="true" />
               ) : (
-                <ChevronDown className="ml-1 h-4 w-4" />
+                <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
               )}
             </Button>
           </div>
@@ -217,116 +292,36 @@ export default function CouponsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {couponsQuery.isLoading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : paginatedItems.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Aucun coupon trouvé
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Réduction</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedItems.map((item) => (
-                    <TableRow
-                      key={item.id}
-                      className="cursor-pointer"
-                      onClick={() => router.push(`/users/${item.customer_id}`)}
-                    >
-                      <TableCell className="font-mono text-sm">
-                        #{item.id}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium">
-                            {item.profiles
-                              ? `${item.profiles.first_name || ""} ${item.profiles.last_name || ""}`.trim() ||
-                                item.profiles.email
-                              : "Inconnu"}
-                          </span>
-                          <p className="text-sm text-muted-foreground">
-                            {item.profiles?.email}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {item.percentage ? (
-                          <Badge
-                            variant="outline"
-                            className="border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-300"
-                          >
-                            {formatPercentage(item.percentage)}
-                          </Badge>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {getSourceLabel(item.distribution_type)}
-                        </span>
-                        {item.period_identifier && (
-                          <p className="text-xs text-muted-foreground">
-                            {item.period_identifier}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {item.used ? (
-                          <Badge variant="secondary">Utilisé</Badge>
-                        ) : isExpired(item.expires_at) ? (
-                          <Badge variant="destructive">Expiré</Badge>
-                        ) : (
-                          <Badge variant="success">Actif</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(item.created_at)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Page {page + 1} sur {totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page === 0}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Précédent
+          <DataTable
+            columns={columns}
+            data={paginatedItems}
+            rowKey={(item) => item.id}
+            loading={couponsQuery.isLoading}
+            onRowClick={(item) => router.push(`/users/${item.customer_id}`)}
+            emptyState={
+              <EmptyState
+                icon={Ticket}
+                title={
+                  statusFilter !== "all" || distributionType
+                    ? "Aucun résultat pour cette recherche"
+                    : "Aucun coupon trouvé"
+                }
+                description={
+                  statusFilter !== "all" || distributionType
+                    ? "Essayez d'élargir les filtres."
+                    : undefined
+                }
+                action={
+                  statusFilter === "all" && !distributionType ? (
+                    <Button asChild>
+                      <Link href="/coupons/create">Créer un coupon</Link>
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= totalPages - 1}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Suivant
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                  ) : undefined
+                }
+              />
+            }
+            pagination={{ page, totalPages, onPageChange: setPage }}
+          />
         </CardContent>
       </Card>
     </div>

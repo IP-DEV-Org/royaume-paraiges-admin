@@ -10,23 +10,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Loader2, Users, UserPlus, Shield, Briefcase, Building2 } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { Users, UserPlus, Shield, Briefcase, Building2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getUsers, getUserStats, type UserFilters } from "@/lib/services/userService";
 import { cn, formatDate } from "@/lib/utils";
 import { userKeys } from "@/lib/queries/keys";
-import type { UserRole } from "@/types/database";
+import type { Profile, UserRole } from "@/types/database";
 
 export default function UsersPage() {
   const [page, setPage] = useState(0);
@@ -109,6 +103,59 @@ export default function UsersPage() {
       ]
     : [];
 
+  const columns: DataTableColumn<Profile>[] = [
+    {
+      key: "user",
+      header: "Utilisateur",
+      sortable: true,
+      sortValue: (user) =>
+        `${user.first_name || ""} ${user.last_name || ""}`.trim() || null,
+      cell: (user) => (
+        <>
+          <div className="font-medium">
+            {user.first_name || user.last_name
+              ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+              : "Sans nom"}
+          </div>
+          {user.username && (
+            <div className="text-xs text-muted-foreground">@{user.username}</div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "email",
+      header: "Email",
+      sortable: true,
+      sortValue: (user) => user.email,
+      cell: (user) => user.email || "-",
+    },
+    {
+      key: "role",
+      header: "Rôle",
+      sortable: true,
+      sortValue: (user) => user.role,
+      cell: (user) =>
+        user.role === "admin" ? (
+          <Badge variant="default">Admin</Badge>
+        ) : user.role === "employee" ? (
+          <Badge variant="outline">Employé</Badge>
+        ) : user.role === "establishment" ? (
+          <Badge variant="secondary">Établissement</Badge>
+        ) : (
+          <Badge variant="secondary">Client</Badge>
+        ),
+    },
+    {
+      key: "created_at",
+      header: "Inscrit le",
+      sortable: true,
+      sortValue: (user) => user.created_at,
+      cellClassName: "text-sm text-muted-foreground",
+      cell: (user) => formatDate(user.created_at),
+    },
+  ];
+
   const renderTile = (tile: {
     label: string;
     value: number;
@@ -131,7 +178,7 @@ export default function UsersPage() {
           <CardTitle className="text-xs font-medium text-muted-foreground">
             {tile.label}
           </CardTitle>
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
         </CardHeader>
         <CardContent className="p-3 pt-0">
           <div className="text-xl font-bold">{tile.value}</div>
@@ -142,12 +189,10 @@ export default function UsersPage() {
 
   return (
     <div className="flex h-full flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold">Utilisateurs</h1>
-        <p className="text-muted-foreground">
-          Gestion des utilisateurs de l’application
-        </p>
-      </div>
+      <PageHeader
+        title="Utilisateurs"
+        description="Gestion des utilisateurs de l’application"
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
         <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">
@@ -190,93 +235,31 @@ export default function UsersPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col md:overflow-hidden">
-            {loading ? (
-              <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : users.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">
-                Aucun utilisateur trouve
-              </div>
-            ) : (
-              <>
-                <div className="min-h-0 flex-1 md:overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Utilisateur</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Inscrit le</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
-                        <TableRow
-                          key={user.id}
-                          className="cursor-pointer"
-                          onClick={() => router.push(`/users/${user.id}`)}
-                        >
-                          <TableCell>
-                            <div className="font-medium">
-                              {user.first_name || user.last_name
-                                ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
-                                : "Sans nom"}
-                            </div>
-                            {user.username && (
-                              <div className="text-xs text-muted-foreground">
-                                @{user.username}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>{user.email || "-"}</TableCell>
-                          <TableCell>
-                            {user.role === "admin" ? (
-                              <Badge variant="default">Admin</Badge>
-                            ) : user.role === "employee" ? (
-                              <Badge variant="outline">Employé</Badge>
-                            ) : user.role === "establishment" ? (
-                              <Badge variant="secondary">Établissement</Badge>
-                            ) : (
-                              <Badge variant="secondary">Client</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(user.created_at)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {totalPages > 1 && (
-                  <div className="mt-4 flex shrink-0 items-center justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      Page {page + 1} sur {totalPages}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={page === 0}
-                        onClick={() => setPage(page - 1)}
-                      >
-                        Précédent
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={page >= totalPages - 1}
-                        onClick={() => setPage(page + 1)}
-                      >
-                        Suivant
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+            <DataTable
+              columns={columns}
+              data={users}
+              rowKey={(user) => user.id}
+              loading={loading}
+              onRowClick={(user) => router.push(`/users/${user.id}`)}
+              className="min-h-0 flex-1 md:overflow-hidden"
+              containerClassName="min-h-0 flex-1 md:overflow-y-auto"
+              emptyState={
+                <EmptyState
+                  icon={Users}
+                  title={
+                    filters.search
+                      ? "Aucun résultat pour cette recherche"
+                      : "Aucun utilisateur trouvé"
+                  }
+                  description={
+                    filters.search
+                      ? "Essayez avec un autre nom ou email."
+                      : undefined
+                  }
+                />
+              }
+              pagination={{ page, totalPages, onPageChange: setPage }}
+            />
           </CardContent>
         </Card>
       </div>

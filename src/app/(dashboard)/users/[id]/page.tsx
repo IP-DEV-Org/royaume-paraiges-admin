@@ -97,7 +97,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { cn, formatCurrency, formatPercentage, formatDate, formatDateTime } from "@/lib/utils";
 import { getPaymentMethodConfig } from "@/lib/payment-methods";
 import type { UserRole } from "@/types/database";
@@ -145,7 +145,6 @@ export default function UserDetailPage() {
   const router = useRouter();
   const params = useParams();
   const userId = params.id as string;
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -280,17 +279,13 @@ export default function UserDetailPage() {
             attachedEstablishmentId: userData.attached_establishment_id?.toString() || "",
           });
         } else {
-          toast({
-            variant: "destructive",
-            title: "Erreur",
+          toast.error("Erreur", {
             description: "Utilisateur introuvable",
           });
           router.push("/users");
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
+        toast.error("Erreur", {
           description: "Impossible de charger l'utilisateur",
         });
         router.push("/users");
@@ -300,7 +295,7 @@ export default function UserDetailPage() {
     };
 
     fetchData();
-  }, [userId, router, toast]);
+  }, [userId, router]);
 
   const fetchActivityStats = useCallback(async () => {
     setLoadingActivity(true);
@@ -312,15 +307,13 @@ export default function UserDetailPage() {
       setActivityStats(data);
       setDailyCashback(daily);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de charger les statistiques d'activité",
       });
     } finally {
       setLoadingActivity(false);
     }
-  }, [userId, activityPeriod, toast]);
+  }, [userId, activityPeriod]);
 
   const fetchGains = useCallback(async () => {
     setLoadingGains(true);
@@ -334,15 +327,13 @@ export default function UserDetailPage() {
       setGains(result.data);
       setGainsTotal(result.count);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de charger les gains",
       });
     } finally {
       setLoadingGains(false);
     }
-  }, [userId, gainsPage, gainsSourceFilter, toast]);
+  }, [userId, gainsPage, gainsSourceFilter]);
 
   const fetchQuestProgress = useCallback(async () => {
     setLoadingQuestProgress(true);
@@ -357,15 +348,13 @@ export default function UserDetailPage() {
       setQuestProgress(result.data);
       setQuestProgressTotal(result.count);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de charger la progression des quêtes",
       });
     } finally {
       setLoadingQuestProgress(false);
     }
-  }, [userId, questProgressPage, questPeriodTypeFilter, questStatusFilter, toast]);
+  }, [userId, questProgressPage, questPeriodTypeFilter, questStatusFilter]);
 
   const fetchCoupons = useCallback(async () => {
     setLoadingCoupons(true);
@@ -374,15 +363,13 @@ export default function UserDetailPage() {
       setCoupons(result.data);
       setCouponsTotal(result.count);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de charger les coupons",
       });
     } finally {
       setLoadingCoupons(false);
     }
-  }, [userId, couponsPage, toast]);
+  }, [userId, couponsPage]);
 
   const fetchReceipts = useCallback(async () => {
     setLoadingReceipts(true);
@@ -391,15 +378,13 @@ export default function UserDetailPage() {
       setReceipts(result.data);
       setReceiptsTotal(result.count);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de charger les tickets",
       });
     } finally {
       setLoadingReceipts(false);
     }
-  }, [userId, receiptsPage, toast]);
+  }, [userId, receiptsPage]);
 
   // Rafraîchit les cartes de stats de l'en-tête (solde, nb tickets, dépensé)
   // après une mutation. La RPC de suppression rafraîchit déjà la matview
@@ -421,8 +406,7 @@ export default function UserDetailPage() {
       setDeletingReceiptId(receiptId);
       try {
         await deleteReceipt(receiptId);
-        toast({
-          title: "Ticket supprimé",
+        toast.success("Ticket supprimé", {
           description: `Le ticket #${receiptId} et toutes ses données associées (gains, lignes de paiement, consommations, réconciliation) ont été supprimés.`,
         });
         // Si on supprime le dernier élément d'une page, recule d'une page.
@@ -437,9 +421,7 @@ export default function UserDetailPage() {
         const isNegativeBalance =
           err?.code === "P0423" ||
           (err?.message?.includes("CASHBACK_BALANCE_NEGATIVE") ?? false);
-        toast({
-          variant: "destructive",
-          title: "Suppression impossible",
+        toast.error("Suppression impossible", {
           description: isNegativeBalance
             ? "Les Paraiges de Bronze gagnés sur ce ticket ont déjà été dépensés ailleurs : le supprimer rendrait le solde du client négatif."
             : "Impossible de supprimer ce ticket. Réessayez ou consultez les logs.",
@@ -448,7 +430,7 @@ export default function UserDetailPage() {
         setDeletingReceiptId(null);
       }
     },
-    [receipts.length, receiptsPage, fetchReceipts, refreshUserStats, toast]
+    [receipts.length, receiptsPage, fetchReceipts, refreshUserStats]
   );
 
   // Load coupons when tab is selected
@@ -500,7 +482,7 @@ export default function UserDetailPage() {
           : null,
       });
 
-      toast({ title: "Utilisateur mis a jour" });
+      toast.success("Utilisateur mis a jour");
       // Update local state
       if (user) {
         setUser({
@@ -514,9 +496,7 @@ export default function UserDetailPage() {
         });
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de mettre a jour l'utilisateur",
       });
     } finally {
@@ -1661,8 +1641,7 @@ export default function UserDetailPage() {
                         try {
                           setAnonymizing(true);
                           await anonymizeUser(userId);
-                          toast({
-                            title: "Compte supprime",
+                          toast.success("Compte supprime", {
                             description: "Le profil a ete anonymise avec succes",
                           });
                           // Reload user data
@@ -1687,10 +1666,8 @@ export default function UserDetailPage() {
                             });
                           }
                         } catch {
-                          toast({
-                            title: "Erreur",
+                          toast.error("Erreur", {
                             description: "Impossible de supprimer le compte",
-                            variant: "destructive",
                           });
                         } finally {
                           setAnonymizing(false);

@@ -30,7 +30,8 @@ import {
   Activity,
 } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
-import { useToast } from "@/components/ui/use-toast";
+import { EmptyState } from "@/components/ui/empty-state";
+import { toast } from "sonner";
 import { getActiveQuests } from "@/lib/services/questService";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -134,8 +135,6 @@ function computeReference(
 type StatusFilter = "alert" | "ok" | "exclusions" | null;
 
 export default function QuestHealthPage() {
-  const { toast } = useToast();
-
   const [loading, setLoading] = useState(true);
   const [quests, setQuests] = useState<QuestWithRelations[]>([]);
   const [establishmentMap, setEstablishmentMap] = useState<Map<number, number>>(new Map());
@@ -179,9 +178,7 @@ export default function QuestHealthPage() {
         setAvgTicket({ cents: avg.avg_ticket_cents, sample: avg.sample_size });
       } catch (error) {
         console.error(error);
-        toast({
-          variant: "destructive",
-          title: "Erreur",
+        toast.error("Erreur", {
           description: "Impossible de charger les données de santé.",
         });
       } finally {
@@ -189,7 +186,7 @@ export default function QuestHealthPage() {
       }
     };
     fetchAll();
-  }, [toast]);
+  }, []);
 
   const rows = useMemo<QuestHealthRow[]>(() => {
     return quests.map((quest) => {
@@ -282,7 +279,7 @@ export default function QuestHealthPage() {
         </div>
         <Button asChild variant="outline">
           <Link href="/settings">
-            <SettingsIcon className="mr-2 h-4 w-4" />
+            <SettingsIcon className="mr-2 h-4 w-4" aria-hidden="true" />
             Paramètres
           </Link>
         </Button>
@@ -292,7 +289,10 @@ export default function QuestHealthPage() {
         <Card className="border-red-200 dark:border-red-900">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              <AlertTriangle
+                className="h-4 w-4 text-red-600 dark:text-red-400"
+                aria-hidden="true"
+              />
               Quêtes actives & planning ({planningAlerts.length})
             </CardTitle>
             <CardDescription>
@@ -317,12 +317,12 @@ export default function QuestHealthPage() {
                     variant="secondary"
                     className="shrink-0 gap-1 bg-amber-100 text-amber-800"
                   >
-                    <Globe className="h-3 w-3" />
+                    <Globe className="h-3 w-3" aria-hidden="true" />
                     Permanente
                   </Badge>
                 ) : (
                   <Badge variant="destructive" className="shrink-0 gap-1">
-                    <AlertTriangle className="h-3 w-3" />
+                    <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                     Planning périmé
                   </Badge>
                 )}
@@ -451,12 +451,12 @@ export default function QuestHealthPage() {
                     <TableCell>
                       {row.establishmentCount === 0 ? (
                         <Badge variant="secondary" className="gap-1">
-                          <Globe className="h-3 w-3" />
+                          <Globe className="h-3 w-3" aria-hidden="true" />
                           Globale
                         </Badge>
                       ) : (
                         <Badge variant="default" className="gap-1">
-                          <Building2 className="h-3 w-3" />
+                          <Building2 className="h-3 w-3" aria-hidden="true" />
                           {row.establishmentCount} établissement
                           {row.establishmentCount > 1 ? "s" : ""}
                         </Badge>
@@ -493,13 +493,13 @@ export default function QuestHealthPage() {
                     <TableCell>
                       {row.status === "alert" && (
                         <Badge variant="destructive" className="gap-1">
-                          <AlertTriangle className="h-3 w-3" />
+                          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                           Alerte
                         </Badge>
                       )}
                       {row.status === "ok" && (
                         <Badge variant="outline" className="gap-1 border-emerald-200 text-emerald-700 dark:border-emerald-900 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" />
+                          <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                           OK
                         </Badge>
                       )}
@@ -515,8 +515,14 @@ export default function QuestHealthPage() {
               })}
               {visibleRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                    {rows.length === 0 ? "Aucune quête active." : "Aucune quête ne correspond au filtre."}
+                  <TableCell colSpan={7}>
+                    <EmptyState
+                      title={
+                        rows.length === 0
+                          ? "Aucune quête active."
+                          : "Aucune quête ne correspond au filtre."
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               )}

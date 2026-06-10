@@ -24,14 +24,13 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { getTemplate, updateTemplate } from "@/lib/services/templateService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { CouponTemplateUpdate } from "@/types/database";
 
 export default function EditTemplatePage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -65,9 +64,7 @@ export default function EditTemplatePage() {
           });
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
+        toast.error("Erreur", {
           description: "Impossible de charger le template",
         });
         router.push("/templates");
@@ -77,7 +74,7 @@ export default function EditTemplatePage() {
     };
 
     fetchData();
-  }, [id, router, toast]);
+  }, [id, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,12 +93,10 @@ export default function EditTemplatePage() {
       };
 
       await updateTemplate(id, template);
-      toast({ title: "Template mis à jour" });
+      toast.success("Template mis à jour");
       router.push("/templates");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de mettre a jour le template",
       });
     } finally {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   Card,
@@ -9,9 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -27,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -34,23 +34,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
-  Loader2,
-  Receipt,
-  TrendingUp,
-} from "lucide-react";
+import { Receipt, TrendingUp } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   getReceipts,
   getReceiptStats,
   type ReceiptFilters,
   type ReceiptWithDetails,
 } from "@/lib/services/receiptService";
-import { getEstablishments, type Establishment } from "@/lib/services/contentService";
+import { getEstablishments } from "@/lib/services/contentService";
+import { establishmentKeys, receiptKeys } from "@/lib/queries/keys";
 import { cn, formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { getPaymentMethodConfig } from "@/lib/payment-methods";
+import { toast } from "sonner";
 import type { ReconciliationStatus } from "@/types/database";
 
 function startOfCurrentMonthIso(): string {
@@ -59,7 +57,6 @@ function startOfCurrentMonthIso(): string {
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 }
-import { useToast } from "@/components/ui/use-toast";
 
 const consumptionTypeLabels: Record<string, string> = {
   cocktail: "Cocktail",
@@ -71,34 +68,12 @@ const consumptionTypeLabels: Record<string, string> = {
 };
 
 function ReconciliationBadge({ status }: { status: ReconciliationStatus }) {
-  if (status === "matched") {
-    return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400">
-        <CheckCircle2 className="mr-1 h-3 w-3" />
-        Réconcilié
-      </Badge>
-    );
-  }
-  if (status === "orphan_royaume") {
-    return (
-      <Badge className="bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400">
-        <AlertTriangle className="mr-1 h-3 w-3" />
-        Orphelin
-      </Badge>
-    );
-  }
-  if (status === "excluded_cashback") {
-    return (
-      <Badge className="bg-slate-500/15 text-slate-700 hover:bg-slate-500/20 dark:text-slate-300">
-        100% PdB
-      </Badge>
-    );
-  }
+  // Registre central status-badge, libellé local conservé pour "matched".
   return (
-    <Badge className="bg-violet-500/15 text-violet-700 hover:bg-violet-500/20 dark:text-violet-400">
-      <HelpCircle className="mr-1 h-3 w-3" />
-      Ambigu
-    </Badge>
+    <StatusBadge
+      status={status}
+      label={status === "matched" ? "Réconcilié" : undefined}
+    />
   );
 }
 
@@ -332,54 +307,51 @@ function ReceiptDetailsDialog({
   );
 }
 
+const limit = 20;
+
 export default function ReceiptsPage() {
-  const [receipts, setReceipts] = useState<ReceiptWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<ReceiptFilters>({});
-  const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithDetails | null>(
     null
   );
-  const [stats, setStats] = useState<{
-    totalReceipts: number;
-    totalRevenue: number;
-    averageAmount: number;
-    receiptsThisMonth: number;
-    revenueThisMonth: number;
-    paymentMethodBreakdown: { method: string; total: number; count: number }[];
-  } | null>(null);
-  const { toast } = useToast();
 
-  const limit = 20;
+  const receiptsQuery = useQuery({
+    queryKey: receiptKeys.list({
+      page,
+      limit,
+      ...(filters as Record<string, unknown>),
+    }),
+    queryFn: () => getReceipts(filters, limit, page * limit),
+    placeholderData: (prev) => prev,
+  });
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [receiptsResult, statsResult, establishmentsResult] = await Promise.all([
-        getReceipts(filters, limit, page * limit),
-        getReceiptStats(),
-        getEstablishments(),
-      ]);
-      setReceipts(receiptsResult.data);
-      setTotal(receiptsResult.count);
-      setStats(statsResult);
-      setEstablishments(establishmentsResult);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: "Impossible de charger les tickets de caisse",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, page, toast]);
+  const statsQuery = useQuery({
+    queryKey: [...receiptKeys.all, "stats"],
+    queryFn: getReceiptStats,
+  });
+
+  const establishmentsQuery = useQuery({
+    queryKey: establishmentKeys.lists(),
+    queryFn: getEstablishments,
+  });
+
+  const loadError =
+    receiptsQuery.error || statsQuery.error || establishmentsQuery.error;
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (loadError) {
+      console.error(loadError);
+      toast.error("Erreur", {
+        description: "Impossible de charger les tickets de caisse",
+      });
+    }
+  }, [loadError]);
+
+  const receipts = receiptsQuery.data?.data ?? [];
+  const total = receiptsQuery.data?.count ?? 0;
+  const stats = statsQuery.data ?? null;
+  const establishments = establishmentsQuery.data ?? [];
 
   const getEstablishmentName = (id: number) => {
     const establishment = establishments.find((e) => e.id === id);
@@ -388,14 +360,144 @@ export default function ReceiptsPage() {
 
   const totalPages = Math.ceil(total / limit);
 
+  const columns: DataTableColumn<ReceiptWithDetails>[] = [
+    {
+      key: "id",
+      header: "ID",
+      sortable: true,
+      sortValue: (receipt) => receipt.id,
+      cellClassName: "font-mono text-sm",
+      cell: (receipt) => (
+        <div className="flex items-center gap-2">
+          #{receipt.id}
+          {receipt.cashpad_reconciliation && (
+            <ReconciliationBadge status={receipt.cashpad_reconciliation.status} />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "customer",
+      header: "Client",
+      sortable: true,
+      sortValue: (receipt) =>
+        receipt.customer
+          ? `${receipt.customer.first_name || ""} ${receipt.customer.last_name || ""}`.trim() ||
+            receipt.customer.email
+          : null,
+      cell: (receipt) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Link
+            href={`/users/${receipt.customer_id}`}
+            className="font-medium hover:underline"
+          >
+            {receipt.customer
+              ? `${receipt.customer.first_name || ""} ${
+                  receipt.customer.last_name || ""
+                }`.trim() || receipt.customer.email
+              : "Inconnu"}
+          </Link>
+          <p className="text-sm text-muted-foreground">
+            {receipt.customer?.email}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "establishment",
+      header: "Établissement",
+      sortable: true,
+      sortValue: (receipt) => getEstablishmentName(receipt.establishment_id),
+      cell: (receipt) => getEstablishmentName(receipt.establishment_id),
+    },
+    {
+      key: "amount",
+      header: "Montant",
+      sortable: true,
+      sortValue: (receipt) => receipt.amount,
+      cell: (receipt) => {
+        const dominantMethod =
+          receipt.receipt_lines && receipt.receipt_lines.length > 0
+            ? receipt.receipt_lines.reduce((max, line) =>
+                line.amount > max.amount ? line : max
+              ).payment_method
+            : null;
+        const amountConfig = dominantMethod
+          ? getPaymentMethodConfig(dominantMethod)
+          : null;
+        return (
+          <Badge
+            variant="outline"
+            className={cn("font-semibold", amountConfig?.badgeClass)}
+          >
+            {formatCurrency(receipt.amount)}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "payment",
+      header: "Paiement",
+      cell: (receipt) => (
+        <div className="flex flex-wrap gap-1">
+          {receipt.receipt_lines && receipt.receipt_lines.length > 0 ? (
+            [...new Set(receipt.receipt_lines.map((line) => line.payment_method))].map(
+              (method) => {
+                const config = getPaymentMethodConfig(method);
+                return (
+                  <Badge
+                    key={method}
+                    variant="outline"
+                    className={cn("flex items-center gap-1", config.badgeClass)}
+                  >
+                    {config.icon}
+                    {config.label}
+                  </Badge>
+                );
+              }
+            )
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "consumptions",
+      header: "Consommations",
+      cell: (receipt) => (
+        <div className="flex flex-wrap gap-1">
+          {receipt.receipt_consumption_items &&
+          receipt.receipt_consumption_items.length > 0 ? (
+            receipt.receipt_consumption_items.map((item) => (
+              <Badge key={item.id} variant="outline">
+                {item.quantity}x{" "}
+                {consumptionTypeLabels[item.consumption_type] ||
+                  item.consumption_type}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Date",
+      sortable: true,
+      sortValue: (receipt) => receipt.created_at,
+      cellClassName: "text-sm text-muted-foreground",
+      cell: (receipt) => formatDateTime(receipt.created_at),
+    },
+  ];
+
   return (
     <div className="flex h-full flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold">Tickets de caisse</h1>
-        <p className="text-muted-foreground">
-          Visualisation des transactions clients
-        </p>
-      </div>
+      <PageHeader
+        title="Tickets de caisse"
+        description="Visualisation des transactions clients"
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
         <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">
@@ -410,7 +512,10 @@ export default function ReceiptsPage() {
                     <CardTitle className="text-xs font-medium text-muted-foreground">
                       Total tickets
                     </CardTitle>
-                    <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Receipt
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
                     <div className="text-xl font-bold">{stats.totalReceipts}</div>
@@ -421,7 +526,10 @@ export default function ReceiptsPage() {
                     <CardTitle className="text-xs font-medium text-muted-foreground">
                       CA total
                     </CardTitle>
-                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TrendingUp
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
                     <div className="text-xl font-bold">
@@ -434,7 +542,10 @@ export default function ReceiptsPage() {
                     <CardTitle className="text-xs font-medium text-muted-foreground">
                       Panier moyen
                     </CardTitle>
-                    <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Receipt
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
                     <div className="text-xl font-bold">
@@ -468,7 +579,10 @@ export default function ReceiptsPage() {
                   <CardTitle className="text-xs font-medium text-muted-foreground">
                     CA ce mois
                   </CardTitle>
-                  <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  <TrendingUp
+                    className="h-3.5 w-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </CardHeader>
                 <CardContent className="p-3 pt-0">
                   <div className="text-xl font-bold">
@@ -509,10 +623,15 @@ export default function ReceiptsPage() {
                     >
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
                         <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                          <span className={cn("h-2 w-2 rounded-full", config.dotClass)} />
+                          <span
+                            className={cn("h-2 w-2 rounded-full", config.dotClass)}
+                            aria-hidden="true"
+                          />
                           {config.label}
                         </CardTitle>
-                        <span className={config.iconColor}>{config.icon}</span>
+                        <span className={config.iconColor} aria-hidden="true">
+                          {config.icon}
+                        </span>
                       </CardHeader>
                       <CardContent className="p-3 pt-0">
                         <div className="text-xl font-bold">{formatCurrency(item.total)}</div>
@@ -567,160 +686,19 @@ export default function ReceiptsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col md:overflow-hidden">
-          {loading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : receipts.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Aucun ticket trouvé
-            </div>
-          ) : (
-            <>
-              <div className="min-h-0 flex-1 md:overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Établissement</TableHead>
-                      <TableHead>Montant</TableHead>
-                      <TableHead>Paiement</TableHead>
-                      <TableHead>Consommations</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                  {receipts.map((receipt) => {
-                    const dominantMethod =
-                      receipt.receipt_lines && receipt.receipt_lines.length > 0
-                        ? receipt.receipt_lines.reduce((max, line) =>
-                            line.amount > max.amount ? line : max
-                          ).payment_method
-                        : null;
-                    const amountConfig = dominantMethod
-                      ? getPaymentMethodConfig(dominantMethod)
-                      : null;
-                    const reconciliation = receipt.cashpad_reconciliation ?? null;
-                    return (
-                    <TableRow
-                      key={receipt.id}
-                      onClick={() => setSelectedReceipt(receipt)}
-                      className="cursor-pointer hover:bg-muted/40"
-                    >
-                      <TableCell className="font-mono text-sm">
-                        <div className="flex items-center gap-2">
-                          #{receipt.id}
-                          {reconciliation && (
-                            <ReconciliationBadge status={reconciliation.status} />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div>
-                          <Link
-                            href={`/users/${receipt.customer_id}`}
-                            className="font-medium hover:underline"
-                          >
-                            {receipt.customer
-                              ? `${receipt.customer.first_name || ""} ${
-                                  receipt.customer.last_name || ""
-                                }`.trim() || receipt.customer.email
-                              : "Inconnu"}
-                          </Link>
-                          <p className="text-sm text-muted-foreground">
-                            {receipt.customer?.email}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getEstablishmentName(receipt.establishment_id)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "font-semibold",
-                            amountConfig?.badgeClass
-                          )}
-                        >
-                          {formatCurrency(receipt.amount)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {receipt.receipt_lines && receipt.receipt_lines.length > 0 ? (
-                            [...new Set(receipt.receipt_lines.map((line) => line.payment_method))].map(
-                              (method) => {
-                                const config = getPaymentMethodConfig(method);
-                                return (
-                                  <Badge
-                                    key={method}
-                                    variant="outline"
-                                    className={cn("flex items-center gap-1", config.badgeClass)}
-                                  >
-                                    {config.icon}
-                                    {config.label}
-                                  </Badge>
-                                );
-                              }
-                            )
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {receipt.receipt_consumption_items && receipt.receipt_consumption_items.length > 0 ? (
-                            receipt.receipt_consumption_items.map((item) => (
-                              <Badge key={item.id} variant="outline">
-                                {item.quantity}x {consumptionTypeLabels[item.consumption_type] || item.consumption_type}
-                              </Badge>
-                            ))
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDateTime(receipt.created_at)}
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {totalPages > 1 && (
-                <div className="mt-4 flex shrink-0 items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Page {page + 1} sur {totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page === 0}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Précédent
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= totalPages - 1}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Suivant
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
+            <DataTable
+              columns={columns}
+              data={receipts}
+              rowKey={(receipt) => receipt.id}
+              loading={receiptsQuery.isLoading}
+              onRowClick={(receipt) => setSelectedReceipt(receipt)}
+              rowClassName="hover:bg-muted/40"
+              className="min-h-0 flex-1 md:overflow-hidden"
+              containerClassName="min-h-0 flex-1 md:overflow-y-auto"
+              emptyState={<EmptyState icon={Receipt} title="Aucun ticket trouvé" />}
+              pagination={{ page, totalPages, onPageChange: setPage }}
+            />
+          </CardContent>
       </Card>
       </div>
 

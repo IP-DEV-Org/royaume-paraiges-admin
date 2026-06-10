@@ -45,6 +45,9 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/layout/page-header";
+import { reconciliationHealthKeys } from "@/lib/queries/keys";
 import {
   getHealthStats30d,
   getClockDrift,
@@ -61,15 +64,14 @@ import {
   type CashpadUserSeen,
 } from "@/lib/services/reconciliationHealthService";
 
-const healthKeys = {
-  stats30d: ["reconciliation-health", "stats30d"] as const,
-  drift: ["reconciliation-health", "drift"] as const,
-  feedback: ["reconciliation-health", "feedback"] as const,
-  mappings: ["reconciliation-health", "mappings"] as const,
-  candidates: ["reconciliation-health", "candidates"] as const,
-  cashpadUsers: (installationId: string) =>
-    ["reconciliation-health", "cashpad-users", installationId] as const,
-};
+// Sous-clés dérivées de la factory centrale (drift/feedback/candidates ne sont
+// pas exposées par `reconciliationHealthKeys`, on les rattache à `.all` pour
+// qu'une invalidation du domaine couvre tout).
+const driftKey = [...reconciliationHealthKeys.all, "drift"] as const;
+const feedbackKey = [...reconciliationHealthKeys.all, "feedback"] as const;
+const candidatesKey = [...reconciliationHealthKeys.all, "candidates"] as const;
+const cashpadUsersKey = (installationId: string) =>
+  [...reconciliationHealthKeys.all, "cashpadUsers", installationId] as const;
 
 const DRIFT_ALERT_SECONDS = 30;
 const ORPHAN_RATE_ALERT_PCT = 30;
@@ -98,13 +100,13 @@ function MappingDialog({
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
 
   const cashpadUsersQuery = useQuery({
-    queryKey: healthKeys.cashpadUsers(installationId),
+    queryKey: cashpadUsersKey(installationId),
     queryFn: () => listCashpadUsersForInstallation(installationId),
     enabled: open,
   });
 
   const candidatesQuery = useQuery({
-    queryKey: healthKeys.candidates,
+    queryKey: candidatesKey,
     queryFn: listEmployeeCandidates,
     enabled: open,
   });
@@ -124,7 +126,7 @@ function MappingDialog({
       }),
     onSuccess: () => {
       toast.success("Mapping créé");
-      qc.invalidateQueries({ queryKey: healthKeys.mappings });
+      qc.invalidateQueries({ queryKey: reconciliationHealthKeys.all });
       setSelectedCashpadUser(null);
       setSelectedProfile(null);
       onClose();
@@ -211,16 +213,22 @@ export default function ReconciliationHealthPage() {
     | null
   >(null);
 
-  const statsQuery = useQuery({ queryKey: healthKeys.stats30d, queryFn: getHealthStats30d });
-  const driftQuery = useQuery({ queryKey: healthKeys.drift, queryFn: getClockDrift });
-  const feedbackQuery = useQuery({ queryKey: healthKeys.feedback, queryFn: getWindowFeedback });
-  const mappingsQuery = useQuery({ queryKey: healthKeys.mappings, queryFn: listEmployeeMappings });
+  const statsQuery = useQuery({
+    queryKey: reconciliationHealthKeys.stats(),
+    queryFn: getHealthStats30d,
+  });
+  const driftQuery = useQuery({ queryKey: driftKey, queryFn: getClockDrift });
+  const feedbackQuery = useQuery({ queryKey: feedbackKey, queryFn: getWindowFeedback });
+  const mappingsQuery = useQuery({
+    queryKey: reconciliationHealthKeys.mappings(),
+    queryFn: listEmployeeMappings,
+  });
 
   const deleteMut = useMutation({
     mutationFn: deleteEmployeeMapping,
     onSuccess: () => {
       toast.success("Mapping supprimé");
-      qc.invalidateQueries({ queryKey: healthKeys.mappings });
+      qc.invalidateQueries({ queryKey: reconciliationHealthKeys.all });
     },
     onError: (err: Error) => {
       toast.error("Erreur suppression", { description: err.message });
@@ -285,21 +293,19 @@ export default function ReconciliationHealthPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <Link
-            href="/reconciliation"
-            className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ChevronLeft className="h-3 w-3" />
-            Retour à la réconciliation
-          </Link>
-          <h1 className="mt-1 text-3xl font-bold">Santé du matching Cashpad</h1>
-          <p className="text-muted-foreground">
-            Stats macro par établissement sur 30 jours, dérive d&apos;horloge POS, mappings serveurs
-            et feedback loop des liens manuels.
-          </p>
-        </div>
+      <div>
+        <Link
+          href="/reconciliation"
+          className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="h-3 w-3" aria-hidden="true" />
+          Retour à la réconciliation
+        </Link>
+        <PageHeader
+          className="mt-1"
+          title="Santé du matching Cashpad"
+          description="Stats macro par établissement sur 30 jours, dérive d'horloge POS, mappings serveurs et feedback loop des liens manuels."
+        />
       </div>
 
       {/* Alertes */}
@@ -307,7 +313,7 @@ export default function ReconciliationHealthPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
               Alertes ({alerts.length})
             </CardTitle>
           </CardHeader>
@@ -409,7 +415,7 @@ export default function ReconciliationHealthPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Watch className="h-5 w-5 text-violet-500" />
+            <Watch className="h-5 w-5 text-violet-500" aria-hidden="true" />
             Feedback loop des liens manuels
           </CardTitle>
           <CardDescription>
@@ -465,8 +471,11 @@ export default function ReconciliationHealthPage() {
                 })}
               {(feedbackQuery.data ?? []).filter((f) => f.manual_links_total > 0).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                    Aucun lien manuel enregistré pour l&apos;instant.
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      icon={Watch}
+                      title="Aucun lien manuel enregistré pour l'instant."
+                    />
                   </TableCell>
                 </TableRow>
               )}
@@ -479,7 +488,7 @@ export default function ReconciliationHealthPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-sky-500" />
+            <Users className="h-5 w-5 text-sky-500" aria-hidden="true" />
             Mappings serveurs Royaume ↔ Cashpad
           </CardTitle>
           <CardDescription>
@@ -502,7 +511,7 @@ export default function ReconciliationHealthPage() {
                     })
                   }
                 >
-                  <Plus className="mr-1 h-3 w-3" />
+                  <Plus className="mr-1 h-3 w-3" aria-hidden="true" />
                   {s.establishment_title}
                 </Button>
               ))}
@@ -540,17 +549,22 @@ export default function ReconciliationHealthPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label="Supprimer le mapping"
                         onClick={() => deleteMut.mutate(m.id)}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3 w-3" aria-hidden="true" />
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
                 {(mappingsQuery.data ?? []).length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
-                      Aucun mapping. Clique sur un établissement ci-dessus pour en créer un.
+                    <TableCell colSpan={4}>
+                      <EmptyState
+                        icon={Users}
+                        title="Aucun mapping"
+                        description="Clique sur un établissement ci-dessus pour en créer un."
+                      />
                     </TableCell>
                   </TableRow>
                 )}
@@ -564,7 +578,7 @@ export default function ReconciliationHealthPage() {
       {alerts.length === 0 && (statsQuery.data ?? []).some((s) => s.n_total > 0) && (
         <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
           <div className="flex items-center gap-2 font-medium text-emerald-700 dark:text-emerald-400">
-            <CheckCircle2 className="h-4 w-4" />
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             Aucune alerte active
           </div>
         </div>

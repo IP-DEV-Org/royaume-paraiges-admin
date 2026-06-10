@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -11,6 +13,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -20,94 +25,79 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Loader2, PlayCircle, CheckCircle, XCircle, Clock, Settings, Plus } from "lucide-react";
+import { ArrowLeft, Calendar, Loader2, PlayCircle, Settings, Plus } from "lucide-react";
 import { getPeriodConfigs } from "@/lib/services/rewardService";
+import { periodKeys } from "@/lib/queries/keys";
 import { formatDateTime } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
-import type { PeriodRewardConfig, PeriodType, DistributionStatus } from "@/types/database";
-
-const statusConfig: Record<
-  DistributionStatus,
-  { label: string; variant: "default" | "success" | "destructive" | "warning"; icon: typeof Clock }
-> = {
-  pending: { label: "En attente", variant: "warning", icon: Clock },
-  distributed: { label: "Distribue", variant: "success", icon: CheckCircle },
-  cancelled: { label: "Annule", variant: "destructive", icon: XCircle },
-  failed: { label: "Echoue", variant: "destructive", icon: XCircle },
-};
+import type { PeriodType } from "@/types/database";
 
 export default function PeriodsPage() {
-  const [configs, setConfigs] = useState<PeriodRewardConfig[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("weekly");
-  const { toast } = useToast();
+
+  const {
+    data: configs = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: periodKeys.lists(),
+    queryFn: () => getPeriodConfigs(),
+  });
 
   useEffect(() => {
-    const fetchConfigs = async () => {
-      try {
-        const data = await getPeriodConfigs();
-        setConfigs(data || []);
-      } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
-          description: "Impossible de charger les périodes",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchConfigs();
-  }, [toast]);
+    if (error) {
+      console.error(error);
+      toast.error("Erreur", {
+        description: "Impossible de charger les périodes",
+      });
+    }
+  }, [error]);
 
   const filteredConfigs = configs.filter((c) => c.period_type === selectedPeriod);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/rewards">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold">Périodes</h1>
-            <p className="text-muted-foreground">
-              Historique et configuration des périodes de distribution
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/rewards/periods/create">
-            <Button variant="outline">
-              <Plus className="mr-2 h-4 w-4" />
-              Nouvelle periode
-            </Button>
-          </Link>
-          <Link href="/rewards/distribute">
-            <Button>
-              <PlayCircle className="mr-2 h-4 w-4" />
-              Distribuer
-            </Button>
-          </Link>
-        </div>
+      <div className="flex items-start gap-4">
+        <Link href="/rewards">
+          <Button variant="ghost" size="icon" aria-label="Retour aux récompenses">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </Link>
+        <PageHeader
+          className="flex-1"
+          title="Périodes"
+          description="Historique et configuration des périodes de distribution"
+          actions={
+            <>
+              <Link href="/rewards/periods/create">
+                <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Nouvelle période
+                </Button>
+              </Link>
+              <Link href="/rewards/distribute">
+                <Button>
+                  <PlayCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Distribuer
+                </Button>
+              </Link>
+            </>
+          }
+        />
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Historique des périodes</CardTitle>
           <CardDescription>
-            Visualisez l&apos;état des distributions par periode
+            Visualisez l&apos;état des distributions par période
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -123,14 +113,12 @@ export default function PeriodsPage() {
 
             <TabsContent value={selectedPeriod}>
               {filteredConfigs.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  Aucune periode configurée
-                </div>
+                <EmptyState icon={Calendar} title="Aucune période configurée" />
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Periode</TableHead>
+                      <TableHead>Période</TableHead>
                       <TableHead>Statut</TableHead>
                       <TableHead>Configuration</TableHead>
                       <TableHead>Date de distribution</TableHead>
@@ -140,8 +128,6 @@ export default function PeriodsPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredConfigs.map((config) => {
-                      const status = config.status ? statusConfig[config.status as DistributionStatus] : statusConfig.pending;
-                      const StatusIcon = status.icon;
                       const hasCustomTiers = config.custom_tiers !== null;
 
                       return (
@@ -150,10 +136,7 @@ export default function PeriodsPage() {
                             {config.period_identifier}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={status.variant as "default"}>
-                              <StatusIcon className="mr-1 h-3 w-3" />
-                              {status.label}
-                            </Badge>
+                            <StatusBadge status={config.status ?? "pending"} />
                           </TableCell>
                           <TableCell>
                             <Badge variant={hasCustomTiers ? "secondary" : "outline"}>
@@ -170,8 +153,12 @@ export default function PeriodsPage() {
                           </TableCell>
                           <TableCell>
                             <Link href={`/rewards/periods/${config.period_type}/${config.period_identifier}`}>
-                              <Button variant="ghost" size="sm">
-                                <Settings className="h-4 w-4" />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`Configurer la période ${config.period_identifier}`}
+                              >
+                                <Settings className="h-4 w-4" aria-hidden="true" />
                               </Button>
                             </Link>
                           </TableCell>

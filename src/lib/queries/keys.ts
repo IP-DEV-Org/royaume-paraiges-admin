@@ -111,12 +111,45 @@ export const reconciliationKeys = {
     [...reconciliationKeys.all, "candidatesByIds", [...ids].sort()] as const,
 };
 
+export const receiptKeys = {
+  all: ["receipts"] as const,
+  lists: () => [...receiptKeys.all, "list"] as const,
+  list: (filters: Record<string, unknown>) =>
+    [...receiptKeys.lists(), filters] as const,
+};
+
+export const historyKeys = {
+  all: ["history"] as const,
+  lists: () => [...historyKeys.all, "list"] as const,
+  list: (filters: Record<string, unknown>) =>
+    [...historyKeys.lists(), filters] as const,
+};
+
+export const periodKeys = {
+  all: ["periods"] as const,
+  lists: () => [...periodKeys.all, "list"] as const,
+  detail: (periodType: string, identifier: string) =>
+    [...periodKeys.all, "detail", periodType, identifier] as const,
+};
+
+export const reconciliationHealthKeys = {
+  all: ["reconciliationHealth"] as const,
+  stats: () => [...reconciliationHealthKeys.all, "stats"] as const,
+  mappings: () => [...reconciliationHealthKeys.all, "mappings"] as const,
+};
+
+export const gdprKeys = {
+  all: ["gdpr"] as const,
+  lists: () => [...gdprKeys.all, "list"] as const,
+};
+
 export const analyticsKeys = {
   all: ["analytics"] as const,
   timeline: (filters: {
     startDate: string;
     endDate: string;
     establishmentIds: number[];
+    includeCashpad: boolean;
   }) =>
     [
       ...analyticsKeys.all,
@@ -126,6 +159,7 @@ export const analyticsKeys = {
         endDate: filters.endDate,
         // trié pour une identité de clé stable quel que soit l'ordre de sélection
         establishmentIds: [...filters.establishmentIds].sort((a, b) => a - b),
+        includeCashpad: filters.includeCashpad,
       },
     ] as const,
   timelineGlobal: (filters: { startDate: string; endDate: string }) =>

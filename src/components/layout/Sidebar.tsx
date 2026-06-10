@@ -3,27 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Ticket,
-  FileText,
   Trophy,
-  History,
-  BarChart3,
-  Users,
-  Receipt,
-  Beer,
-  Building2,
-  BookOpen,
-  BookText,
   LogOut,
-  Target,
   ChevronsLeft,
   ChevronsRight,
-  Shield,
-  Scale,
-  Coins,
-  Award,
-  Settings as SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,52 +18,7 @@ import {
 } from "@/components/ui/tooltip";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-
-const navigationGroups = [
-  {
-    title: "Vue d'ensemble",
-    items: [
-      { name: "Dashboard", href: "/", icon: LayoutDashboard },
-      { name: "Analytics", href: "/analytics", icon: BarChart3 },
-      { name: "Réconciliation Cashpad", href: "/reconciliation", icon: Scale },
-    ],
-  },
-  {
-    title: "Activité",
-    items: [
-      { name: "Utilisateurs", href: "/users", icon: Users },
-      { name: "Tickets de caisse", href: "/receipts", icon: Receipt },
-      { name: "Coupons", href: "/coupons", icon: Ticket },
-      { name: "Bonus cashback", href: "/rewards/cashback-gains", icon: Coins },
-      { name: "Historique de distribution", href: "/history", icon: History },
-    ],
-  },
-  {
-    title: "Gamification",
-    items: [
-      { name: "Quêtes", href: "/quests", icon: Target },
-      { name: "Paliers & saison", href: "/rewards", icon: Trophy },
-      { name: "Badges", href: "/rewards/achievements", icon: Award },
-      { name: "Niveaux & lore", href: "/content/storytelling", icon: BookOpen },
-      { name: "Modèles de coupons", href: "/templates", icon: FileText },
-    ],
-  },
-  {
-    title: "Contenu",
-    items: [
-      { name: "Bières", href: "/content/beers", icon: Beer },
-      { name: "Établissements", href: "/content/establishments", icon: Building2 },
-    ],
-  },
-  {
-    title: "Système",
-    items: [
-      { name: "RGPD", href: "/gdpr", icon: Shield },
-      { name: "Documentation", href: "/documentation", icon: BookText },
-      { name: "Paramètres", href: "/settings", icon: SettingsIcon },
-    ],
-  },
-];
+import { navigationGroups } from "@/lib/navigation";
 
 interface SidebarProps {
   collapsed?: boolean;
