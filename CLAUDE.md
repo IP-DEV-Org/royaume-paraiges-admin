@@ -68,13 +68,15 @@ Toujours utiliser ces composants plutôt que de réécrire le pattern localement
 
 **`/reconciliation`** : découpée (juin 2026). La page (`page.tsx`, ~370 lignes) ne garde que l'orchestration : états (période via `period-range` partagé, filtre établissement, filtre statut, progression de run), queries, `runReconciliation` + abort, StatCards, `ConfirmDialog` du run global. Le rendu vit dans `reconciliation/_components/` — `shared.tsx` (formatage € / dates avec secondes / Δ, `DateTimeCell`, `ConfidenceCell`, `Field`, skeletons — les secondes sont load-bearing, ne pas remplacer par les helpers de `@/lib/utils`), `orphans-card.tsx` / `ambiguous-card.tsx` / `matched-card.tsx` (les 3 tables), `details-dialog.tsx` (Royaume + Cashpad côte à côte, score de confiance, candidats, alerte cancelled_match), `manual-link-dialog.tsx` (fenêtre ajustable 5→120 min, queries candidats + mutation `linkManually`), `run-controls.tsx` (boutons Relancer/Global/Stopper + progress bar). Aucune logique métier dans les `_components` hors les deux queries/mutation du lien manuel.
 
+**`/users/[id]`** : découpée (juin 2026). La page (`page.tsx`, ~190 lignes) ne garde que les queries racine (`getUserWithStats` → `userKeys.detail(id)`, `getUserFullStats` → `[...userKeys.detail(id), "fullStats"]`, établissements), l'en-tête et la navigation par onglets. Le rendu vit dans `users/[id]/_components/` — `overview-tab.tsx` (profil + QR code), `activity-tab.tsx` (stats de période + graphique Recharts + table de progression des quêtes), `gains-tab.tsx` (ligne cliquable vers la quête sur les gains `bonus_cashback_quest`), `coupons-tab.tsx`, `receipts-tab.tsx` (suppression de ticket : AlertDialog + RPC `admin_delete_receipt`), `edit-tab.tsx` (édition profil + zone dangereuse RGPD, state initialisé depuis les props) — plus les transverses `user-stats-cards.tsx`, `user-role-badge.tsx`, `table-pagination.tsx` et `types.ts` (`UserDetail`/`mapUserDetail`, `USER_DETAIL_PAGE_SIZE`). Chaque onglet fetch ses données en `useQuery` sous une clé dérivée `[...userKeys.detail(id), "gains" | "receipts" | …]` (Radix démonte les onglets inactifs → le lazy-load par onglet est conservé) ; toutes les mutations (suppression ticket, update profil, anonymisation RGPD) invalident `userKeys.all`. EmptyState + StatusBadge (statuts quêtes/coupons) adoptés.
+
 ### Data fetching — TanStack React Query
 
 `QueryProvider` dans `src/app/layout.tsx` (staleTime 30s, retry 1, no refetchOnWindowFocus). Query keys factories : `src/lib/queries/keys.ts` par domaine.
 
 **Règle** : toute mutation qui change un listing **doit** invalider `xxxKeys.all` du domaine, sinon stale jusqu'à 30s.
 
-Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026), plus les pages détail `content/*/[id]` (useQuery `beerKeys.detail` / `establishmentKeys.detail`, juin 2026). Plus aucune page en `useEffect+useState`.
+Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026), `users/[id]` (onglets du détail, juin 2026), plus les pages détail `content/*/[id]` (useQuery `beerKeys.detail` / `establishmentKeys.detail`, juin 2026). Plus aucune page en `useEffect+useState`.
 
 ### Conversion target_value des quêtes — piège récurrent
 
@@ -286,7 +288,7 @@ queryClient.invalidateQueries({ queryKey: questKeys.all });
 
 **Règle** : toute mutation qui change le contenu d'un listing **doit** invalider la query key `xxxKeys.all` du domaine pour que la liste se rafraîchisse au retour. Sans ça, l'utilisateur voit du stale jusqu'à 30s.
 
-**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `quests`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`, plus les pages détail `content/beers/[id]` et `content/establishments/[id]`.
+**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `quests`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`, `users/[id]` (onglets du détail), plus les pages détail `content/beers/[id]` et `content/establishments/[id]`.
 
 ### Conversion target_value des quêtes — piège récurrent
 
