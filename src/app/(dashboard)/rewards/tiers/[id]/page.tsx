@@ -29,7 +29,7 @@ import {
   getBadgeTypes,
 } from "@/lib/services/rewardService";
 import { getActiveTemplates } from "@/lib/services/templateService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import {
   AlertDialog,
@@ -48,7 +48,6 @@ export default function EditTierPage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -91,9 +90,7 @@ export default function EditTierPage() {
           });
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
+        toast.error("Erreur", {
           description: "Impossible de charger le palier",
         });
         router.push("/rewards");
@@ -103,7 +100,7 @@ export default function EditTierPage() {
     };
 
     fetchData();
-  }, [id, router, toast]);
+  }, [id, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,12 +121,10 @@ export default function EditTierPage() {
         display_order: parseInt(form.displayOrder),
         is_active: form.isActive,
       });
-      toast({ title: "Palier mis à jour" });
+      toast.success("Palier mis à jour");
       router.push("/rewards");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de mettre a jour le palier",
       });
     } finally {
@@ -140,12 +135,10 @@ export default function EditTierPage() {
   const handleDelete = async () => {
     try {
       await deleteRewardTier(id);
-      toast({ title: "Palier supprime" });
+      toast.success("Palier supprime");
       router.push("/rewards");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de supprimer le palier",
       });
     }

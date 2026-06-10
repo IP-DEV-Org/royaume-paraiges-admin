@@ -24,7 +24,8 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Loader2, Download, CheckCircle, Shield } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatDateTime } from "@/lib/utils";
 import {
   getGdprRequests,
@@ -54,7 +55,6 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function GdprPage() {
-  const { toast } = useToast();
   const [requests, setRequests] = useState<GdprRequestWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
@@ -75,15 +75,13 @@ export default function GdprPage() {
       setRequests(data);
       setTotalCount(count);
     } catch {
-      toast({
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de charger les demandes RGPD",
-        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, toast]);
+  }, [page, statusFilter]);
 
   useEffect(() => {
     loadRequests();
@@ -102,12 +100,10 @@ export default function GdprPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast({ title: "Export telecharge" });
+      toast.success("Export telecharge");
     } catch {
-      toast({
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible d'exporter les donnees",
-        variant: "destructive",
       });
     } finally {
       setExportingId(null);
@@ -118,13 +114,11 @@ export default function GdprPage() {
     try {
       setProcessingId(requestId);
       await updateGdprRequestStatus(requestId, "completed");
-      toast({ title: "Demande marquee comme traitee" });
+      toast.success("Demande marquee comme traitee");
       await loadRequests();
     } catch {
-      toast({
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de mettre a jour le statut",
-        variant: "destructive",
       });
     } finally {
       setProcessingId(null);
@@ -154,7 +148,7 @@ export default function GdprPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
+            <Shield className="h-5 w-5" aria-hidden="true" />
             Demandes ({totalCount})
           </CardTitle>
           <CardDescription>
@@ -167,9 +161,7 @@ export default function GdprPage() {
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : requests.length === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">
-              Aucune demande trouvee
-            </p>
+            <EmptyState icon={Shield} title="Aucune demande trouvee" />
           ) : (
             <>
               <Table>
@@ -219,9 +211,9 @@ export default function GdprPage() {
                             disabled={exportingId === request.user_id}
                           >
                             {exportingId === request.user_id ? (
-                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />
                             ) : (
-                              <Download className="mr-1 h-3 w-3" />
+                              <Download className="mr-1 h-3 w-3" aria-hidden="true" />
                             )}
                             Export
                           </Button>
@@ -233,9 +225,9 @@ export default function GdprPage() {
                               disabled={processingId === request.id}
                             >
                               {processingId === request.id ? (
-                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />
                               ) : (
-                                <CheckCircle className="mr-1 h-3 w-3" />
+                                <CheckCircle className="mr-1 h-3 w-3" aria-hidden="true" />
                               )}
                               Traiter
                             </Button>

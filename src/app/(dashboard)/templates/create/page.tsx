@@ -24,7 +24,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createTemplate, getTemplate } from "@/lib/services/templateService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { templateKeys } from "@/lib/queries/keys";
 import type { CouponTemplateInsert } from "@/types/database";
@@ -33,7 +33,6 @@ function CreateTemplateForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const duplicateId = searchParams.get("duplicate");
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [loading, setLoading] = useState(false);
@@ -96,12 +95,10 @@ function CreateTemplateForm() {
 
       await createTemplate(template);
       queryClient.invalidateQueries({ queryKey: templateKeys.all });
-      toast({ title: "Template créé avec succes" });
+      toast.success("Template créé avec succes");
       router.push("/templates");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de creer le template",
       });
     } finally {

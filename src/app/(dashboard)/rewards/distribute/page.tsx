@@ -43,8 +43,8 @@ import {
   getDistributionPreview,
   distributeRewards,
 } from "@/lib/services/rewardService";
-import { getPeriodIdentifier, formatCurrency, formatPercentage } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
+import { getPeriodIdentifier, formatCurrency } from "@/lib/utils";
+import { toast } from "sonner";
 import type { PeriodType } from "@/types/database";
 
 interface PreviewItem {
@@ -65,8 +65,6 @@ interface CustomerInfo {
 }
 
 export default function DistributePage() {
-  const { toast } = useToast();
-
   const [periodType, setPeriodType] = useState<PeriodType>("weekly");
   const [periodIdentifier, setPeriodIdentifier] = useState("");
   const [preview, setPreview] = useState<PreviewItem[]>([]);
@@ -102,11 +100,7 @@ export default function DistributePage() {
 
   const handlePreview = async () => {
     if (!periodIdentifier) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: "Sélectionnez une periode",
-      });
+      toast.error("Erreur", { description: "Sélectionnez une periode" });
       return;
     }
 
@@ -123,9 +117,7 @@ export default function DistributePage() {
       };
 
       if (result?.success === false) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
+        toast.error("Erreur", {
           description: result.error || "La prévisualisation a échoué",
         });
         return;
@@ -149,9 +141,7 @@ export default function DistributePage() {
         setCustomers(map);
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de générer la previsualisation",
       });
     } finally {
@@ -168,15 +158,12 @@ export default function DistributePage() {
         periodIdentifier
       );
 
-      toast({
-        title: "Distribution effectuée",
+      toast.success("Distribution effectuée", {
         description: `${(result as { distributed_count: number })?.distributed_count || 0} coupons distribues`,
       });
       setDistributed(true);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Erreur lors de la distribution",
       });
     } finally {
@@ -189,8 +176,8 @@ export default function DistributePage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/rewards">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+          <Button variant="ghost" size="icon" aria-label="Retour aux récompenses">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
         </Link>
         <div>
@@ -260,9 +247,9 @@ export default function DistributePage() {
                 className="w-full"
               >
                 {loading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Eye className="mr-2 h-4 w-4" />
+                  <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
                 )}
                 Prévisualiser
               </Button>
@@ -284,16 +271,16 @@ export default function DistributePage() {
             {!distributed && (
               <Button onClick={() => setShowConfirm(true)} disabled={distributing}>
                 {distributing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <PlayCircle className="mr-2 h-4 w-4" />
+                  <PlayCircle className="mr-2 h-4 w-4" aria-hidden="true" />
                 )}
                 Distribuér
               </Button>
             )}
             {distributed && (
               <Badge variant="success" className="text-base py-2 px-4">
-                <CheckCircle className="mr-2 h-4 w-4" />
+                <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />
                 Distribué
               </Badge>
             )}

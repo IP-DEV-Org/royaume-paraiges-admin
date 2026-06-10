@@ -61,7 +61,7 @@ import {
   type DebtsData,
 } from "@/lib/services/analyticsService";
 import { PeriodSelector, getPresetDates, type PeriodDates } from "@/components/period-selector";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 
 const ALL_CONSUMPTION_TYPES: { type: ConsumptionType; label: string; icon: string }[] = [
@@ -78,7 +78,6 @@ export default function EditEstablishmentPage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -156,17 +155,11 @@ export default function EditEstablishmentPage() {
             // Non-blocking
           }
         } else {
-          toast({
-            variant: "destructive",
-            title: "Erreur",
-            description: "Établissement introuvable",
-          });
+          toast.error("Erreur", { description: "Établissement introuvable" });
           router.push("/content/establishments");
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
+        toast.error("Erreur", {
           description: "Impossible de charger l'établissement",
         });
         router.push("/content/establishments");
@@ -176,7 +169,7 @@ export default function EditEstablishmentPage() {
     };
 
     fetchData();
-  }, [id, router, toast]);
+  }, [id, router]);
 
   // Load employees for this establishment
   useEffect(() => {
@@ -207,15 +200,13 @@ export default function EditEstablishmentPage() {
       setRevenueData(revenue);
       setDebtsData(debts);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de charger les statistiques",
       });
     } finally {
       setLoadingStats(false);
     }
-  }, [statsPeriod, selectedEmployeeId, id, toast]);
+  }, [statsPeriod, selectedEmployeeId, id]);
 
   // Load stats when tab is active or filters change
   useEffect(() => {
@@ -305,12 +296,10 @@ export default function EditEstablishmentPage() {
         }))
       );
 
-      toast({ title: "Établissement mis à jour" });
+      toast.success("Établissement mis à jour");
       router.push("/content/establishments");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de mettre à jour l'établissement",
       });
     } finally {
@@ -330,8 +319,12 @@ export default function EditEstablishmentPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/content/establishments">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Retour à la liste des établissements"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
         </Link>
         <div>
@@ -343,11 +336,11 @@ export default function EditEstablishmentPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="info" className="flex items-center gap-2">
-            <Edit className="h-4 w-4" />
+            <Edit className="h-4 w-4" aria-hidden="true" />
             Informations
           </TabsTrigger>
           <TabsTrigger value="stats" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
+            <BarChart3 className="h-4 w-4" aria-hidden="true" />
             Statistiques
           </TabsTrigger>
         </TabsList>
@@ -446,9 +439,10 @@ export default function EditEstablishmentPage() {
                           <button
                             type="button"
                             onClick={handleRemoveFeaturedImage}
+                            aria-label="Retirer la nouvelle image principale"
                             className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/90"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -499,9 +493,10 @@ export default function EditEstablishmentPage() {
                           <button
                             type="button"
                             onClick={handleRemoveLogo}
+                            aria-label="Retirer le nouveau logo"
                             className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/90"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -652,7 +647,9 @@ export default function EditEstablishmentPage() {
                 </Button>
               </Link>
               <Button type="submit" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loading && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                )}
                 Enregistrer
               </Button>
             </div>

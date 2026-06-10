@@ -58,7 +58,7 @@ import {
   type SeasonClosureLog,
   type SeasonClosureStep,
 } from "@/lib/services/seasonService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 const RANK_ORDER = [
   "Écuyer",
@@ -82,7 +82,6 @@ function StepBadge({ done }: { done: boolean }) {
 }
 
 export default function SeasonClosurePage() {
-  const { toast } = useToast();
   const currentYear = new Date().getFullYear();
   const yearOptions = useMemo(
     () => Array.from({ length: 4 }, (_, i) => currentYear - 1 + i),
@@ -106,15 +105,13 @@ export default function SeasonClosurePage() {
       setPreview(p);
       setLogs(l);
     } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: err instanceof Error ? err.message : "Chargement impossible",
       });
     } finally {
       setLoadingPreview(false);
     }
-  }, [selectedYear, toast]);
+  }, [selectedYear]);
 
   useEffect(() => {
     refresh();
@@ -133,22 +130,19 @@ export default function SeasonClosurePage() {
         : step === "award_badges" ? "Distribution des badges"
         : "Reset";
       if (result.skipped) {
-        toast({ title: `${stepLabel} déjà exécuté`, description: result.reason ?? "Idempotence : aucune action" });
+        toast.success(`${stepLabel} déjà exécuté`, { description: result.reason ?? "Idempotence : aucune action" });
       } else {
         const count =
           step === "snapshot" ? result.snapshotted
           : step === "award_badges" ? result.badges_awarded
           : result.profiles_reset;
-        toast({
-          title: `${stepLabel} terminé`,
+        toast.success(`${stepLabel} terminé`, {
           description: `${count ?? 0} ligne(s) traitée(s) en ${result.duration_ms ?? 0} ms`,
         });
       }
       await refresh();
     } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Échec de l'étape",
+      toast.error("Échec de l'étape", {
         description: err instanceof Error ? err.message : "Erreur inconnue",
       });
     } finally {

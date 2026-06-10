@@ -24,13 +24,12 @@ import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createRewardTier, getBadgeTypes } from "@/lib/services/rewardService";
 import { getActiveTemplates } from "@/lib/services/templateService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import type { BadgeType, CouponTemplate, RewardTierInsert, PeriodType } from "@/types/database";
 
 export default function CreateTierPage() {
   const router = useRouter();
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<CouponTemplate[]>([]);
@@ -84,12 +83,10 @@ export default function CreateTierPage() {
       };
 
       await createRewardTier(tier);
-      toast({ title: "Palier créé avec succes" });
+      toast.success("Palier créé avec succes");
       router.push("/rewards");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de créer le palier",
       });
     } finally {

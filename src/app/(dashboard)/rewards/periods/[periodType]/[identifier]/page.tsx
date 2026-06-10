@@ -32,7 +32,7 @@ import {
 } from "@/lib/services/rewardService";
 import { getActiveTemplates } from "@/lib/services/templateService";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type {
   PeriodRewardConfig,
   RewardTier,
@@ -68,7 +68,6 @@ const statusConfig: Record<
 export default function PeriodConfigPage() {
   const router = useRouter();
   const params = useParams();
-  const { toast } = useToast();
 
   const periodType = params.periodType as PeriodType;
   const periodIdentifier = decodeURIComponent(params.identifier as string);
@@ -105,9 +104,7 @@ export default function PeriodConfigPage() {
           }
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Erreur",
+        toast.error("Erreur", {
           description: "Impossible de charger la configuration",
         });
       } finally {
@@ -116,7 +113,7 @@ export default function PeriodConfigPage() {
     };
 
     fetchData();
-  }, [periodType, periodIdentifier, toast]);
+  }, [periodType, periodIdentifier]);
 
   const handleAddTier = () => {
     const lastTier = customTiers[customTiers.length - 1];
@@ -170,12 +167,10 @@ export default function PeriodConfigPage() {
         notes || undefined
       );
 
-      toast({ title: "Configuration enregistrée" });
+      toast.success("Configuration enregistrée");
       router.push("/rewards/periods");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible d'enregistrer la configuration",
       });
     } finally {

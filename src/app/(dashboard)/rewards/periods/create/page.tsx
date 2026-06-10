@@ -24,12 +24,11 @@ import {
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createPeriodConfig } from "@/lib/services/rewardService";
 import { getCurrentPeriodIdentifier } from "@/lib/services/periodService";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { PeriodType } from "@/types/database";
 
 export default function CreatePeriodPage() {
   const router = useRouter();
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -57,12 +56,10 @@ export default function CreatePeriodPage() {
         notes: form.notes || null,
       });
 
-      toast({ title: "Periode créée avec succes" });
+      toast.success("Periode créée avec succes");
       router.push(`/rewards/periods/${form.periodType}/${form.periodIdentifier}`);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
+      toast.error("Erreur", {
         description: "Impossible de creer la periode. Elle existe peut-être deja.",
       });
     } finally {
