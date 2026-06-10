@@ -37,9 +37,20 @@ Pattern : `useForm<FormInput>({ resolver: zodResolver(schema), defaultValues })`
 - `register("name")` pour les `<Input>`, `<Controller>` pour les `<Select>`/`<Switch>` shadcn.
 - Erreurs Zod : `errors.name?.message` avec `text-xs text-destructive`.
 - Erreur serveur : state local `serverError`, bandeau au-dessus des actions.
-- Toasts : `import { toast } from "sonner"` (pas le `useToast` shadcn).
+- Toasts : `import { toast } from "sonner"` — **seul système** depuis juin 2026 : le `useToast`/`toaster.tsx`/`toast.tsx` shadcn a été supprimé du repo, ne pas le réintroduire.
 
 Forms migrés : `coupons/create`, `rewards/achievements/_form/AchievementBadgeForm`, `quests/_form/QuestForm`.
+
+### Composants UI partagés (juin 2026)
+
+Toujours utiliser ces composants plutôt que de réécrire le pattern localement :
+
+- **`<PageHeader title description? actions? />`** (`src/components/layout/page-header.tsx`) — en-tête h1+description+actions de chaque page.
+- **`<EmptyState icon? title description? action? />`** (`src/components/ui/empty-state.tsx`) — état vide standard (dans une table : `<TableCell colSpan={N}>`). Si un filtre/recherche est actif, titre « Aucun résultat pour cette recherche » ; sinon CTA de création quand la page en a un.
+- **`<StatusBadge status label? tone? />`** (`src/components/ui/status-badge.tsx`) — registre central statut → libellé FR + tonalité (réconciliation, distributions, quest_progress, RGPD, coupons). Ajouter les nouveaux statuts au registre, pas en local.
+- **`<ConfirmDialog open onOpenChange title description confirmLabel? destructive? onConfirm />`** (`src/components/ui/confirm-dialog.tsx`) — toute confirmation ; `window.confirm` est banni.
+- **Navigation** : `src/lib/navigation.ts` est la source unique (sidebar + breadcrumb + palette Cmd+K). Nouvelle page → l'ajouter là (`navigationGroups` ou `extraPages` de `command-palette.tsx`) + `segmentLabels` pour le fil d'Ariane.
+- Pages d'erreur brandées : `src/app/not-found.tsx`, `src/app/error.tsx`, `src/app/(dashboard)/error.tsx`.
 
 **`/settings`** : simplifié (mai 2026). Header purgé du jargon BDD (`admin_settings`, "migration 020"). Descriptions des champs réécrites en français clair (plus de balises `<code>` exposant les noms d'enum quest_type). Lien vers `/quests/health` ajouté pour expliquer où les alertes apparaissent. Migration TanStack Query + sonner. Pattern : page = chargement queries + handoff vers `<SettingsForm>` enfant qui initialise son state depuis les props (évite la règle eslint `react-hooks/set-state-in-effect` de React 19).
 
@@ -59,7 +70,7 @@ Forms migrés : `coupons/create`, `rewards/achievements/_form/AchievementBadgeFo
 
 **Règle** : toute mutation qui change un listing **doit** invalider `xxxKeys.all` du domaine, sinon stale jusqu'à 30s.
 
-Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`.
+Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026). Reste en `useEffect+useState` : le listing `/quests` (909 lignes, PR dédiée) et les pages détail `content/*/[id]`.
 
 ### Conversion target_value des quêtes — piège récurrent
 
@@ -269,7 +280,7 @@ queryClient.invalidateQueries({ queryKey: questKeys.all });
 
 **Règle** : toute mutation qui change le contenu d'un listing **doit** invalider la query key `xxxKeys.all` du domaine pour que la liste se rafraîchisse au retour. Sans ça, l'utilisateur voit du stale jusqu'à 30s.
 
-**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`. Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
+**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`. Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
 
 ### Conversion target_value des quêtes — piège récurrent
 
