@@ -40,6 +40,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   getTemplates,
   toggleTemplateActive,
@@ -113,27 +115,25 @@ export default function TemplatesPage() {
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Templates de coupons</h1>
-          <p className="text-muted-foreground">
-            Gérez les modèles de coupons réutilisables
-          </p>
-        </div>
-        <Link href="/templates/create">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nouveau template
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Templates de coupons"
+        description="Gérez les modèles de coupons réutilisables"
+        actions={
+          <Link href="/templates/create">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              Nouveau template
+            </Button>
+          </Link>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -144,9 +144,16 @@ export default function TemplatesPage() {
         </CardHeader>
         <CardContent>
           {templates.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Aucun template. Créez-en un pour commencer.
-            </div>
+            <EmptyState
+              icon={Copy}
+              title="Aucun template"
+              description="Créez-en un pour commencer."
+              action={
+                <Button asChild>
+                  <Link href="/templates/create">Créer un template</Link>
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -212,6 +219,7 @@ export default function TemplatesPage() {
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <Switch
+                        aria-label={`Activer ou désactiver le template ${template.name}`}
                         checked={template.is_active ?? false}
                         onCheckedChange={(checked) =>
                           toggleMutation.mutate({
@@ -230,8 +238,12 @@ export default function TemplatesPage() {
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Actions du template"
+                          >
+                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -239,7 +251,7 @@ export default function TemplatesPage() {
                             href={`/templates/create?duplicate=${template.id}`}
                           >
                             <DropdownMenuItem>
-                              <Copy className="mr-2 h-4 w-4" />
+                              <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
                               Dupliquer
                             </DropdownMenuItem>
                           </Link>
@@ -247,7 +259,7 @@ export default function TemplatesPage() {
                             className="text-destructive"
                             onClick={() => setDeleteId(template.id)}
                           >
-                            <Trash2 className="mr-2 h-4 w-4" />
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                             Supprimer
                           </DropdownMenuItem>
                         </DropdownMenuContent>

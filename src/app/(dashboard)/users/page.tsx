@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/table";
 import { Loader2, Users, UserPlus, Shield, Briefcase, Building2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getUsers, getUserStats, type UserFilters } from "@/lib/services/userService";
 import { cn, formatDate } from "@/lib/utils";
 import { userKeys } from "@/lib/queries/keys";
@@ -131,7 +133,7 @@ export default function UsersPage() {
           <CardTitle className="text-xs font-medium text-muted-foreground">
             {tile.label}
           </CardTitle>
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
         </CardHeader>
         <CardContent className="p-3 pt-0">
           <div className="text-xl font-bold">{tile.value}</div>
@@ -142,12 +144,10 @@ export default function UsersPage() {
 
   return (
     <div className="flex h-full flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold">Utilisateurs</h1>
-        <p className="text-muted-foreground">
-          Gestion des utilisateurs de l’application
-        </p>
-      </div>
+      <PageHeader
+        title="Utilisateurs"
+        description="Gestion des utilisateurs de l’application"
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
         <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">
@@ -192,12 +192,22 @@ export default function UsersPage() {
           <CardContent className="flex min-h-0 flex-1 flex-col md:overflow-hidden">
             {loading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
               </div>
             ) : users.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">
-                Aucun utilisateur trouve
-              </div>
+              <EmptyState
+                icon={Users}
+                title={
+                  filters.search
+                    ? "Aucun résultat pour cette recherche"
+                    : "Aucun utilisateur trouvé"
+                }
+                description={
+                  filters.search
+                    ? "Essayez avec un autre nom ou email."
+                    : undefined
+                }
+              />
             ) : (
               <>
                 <div className="min-h-0 flex-1 md:overflow-y-auto">
@@ -206,7 +216,7 @@ export default function UsersPage() {
                       <TableRow>
                         <TableHead>Utilisateur</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
+                        <TableHead>Rôle</TableHead>
                         <TableHead>Inscrit le</TableHead>
                       </TableRow>
                     </TableHeader>

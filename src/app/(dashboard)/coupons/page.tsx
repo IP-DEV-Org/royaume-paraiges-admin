@@ -29,7 +29,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Plus, Ticket } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { getCoupons, type CouponFilters } from "@/lib/services/couponService";
 import { formatPercentage, formatDate } from "@/lib/utils";
 import { couponKeys } from "@/lib/queries/keys";
@@ -128,20 +131,18 @@ export default function CouponsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Coupons</h1>
-          <p className="text-muted-foreground">
-            Coupons (%) distribués aux utilisateurs.
-          </p>
-        </div>
-        <Link href="/coupons/create">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nouveau coupon
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Coupons"
+        description="Coupons (%) distribués aux utilisateurs."
+        actions={
+          <Link href="/coupons/create">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              Nouveau coupon
+            </Button>
+          </Link>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -173,9 +174,9 @@ export default function CouponsPage() {
             >
               Filtres avancés
               {showAdvanced ? (
-                <ChevronUp className="ml-1 h-4 w-4" />
+                <ChevronUp className="ml-1 h-4 w-4" aria-hidden="true" />
               ) : (
-                <ChevronDown className="ml-1 h-4 w-4" />
+                <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
               )}
             </Button>
           </div>
@@ -219,12 +220,29 @@ export default function CouponsPage() {
         <CardContent>
           {couponsQuery.isLoading ? (
             <div className="flex h-32 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
             </div>
           ) : paginatedItems.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Aucun coupon trouvé
-            </div>
+            <EmptyState
+              icon={Ticket}
+              title={
+                statusFilter !== "all" || distributionType
+                  ? "Aucun résultat pour cette recherche"
+                  : "Aucun coupon trouvé"
+              }
+              description={
+                statusFilter !== "all" || distributionType
+                  ? "Essayez d'élargir les filtres."
+                  : undefined
+              }
+              action={
+                statusFilter === "all" && !distributionType ? (
+                  <Button asChild>
+                    <Link href="/coupons/create">Créer un coupon</Link>
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : (
             <>
               <Table>
@@ -285,11 +303,11 @@ export default function CouponsPage() {
                       </TableCell>
                       <TableCell>
                         {item.used ? (
-                          <Badge variant="secondary">Utilisé</Badge>
+                          <StatusBadge status="used" />
                         ) : isExpired(item.expires_at) ? (
-                          <Badge variant="destructive">Expiré</Badge>
+                          <StatusBadge status="expired" label="Expiré" tone="destructive" />
                         ) : (
-                          <Badge variant="success">Actif</Badge>
+                          <StatusBadge status="active" />
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
