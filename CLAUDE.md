@@ -64,13 +64,15 @@ Toujours utiliser ces composants plutôt que de réécrire le pattern localement
 
 **Comparaison Cashpad à la demande (migration 056, juin 2026)** : le calcul des colonnes « selon Cashpad » (`euro_cashpad_*`, `pdb_cashpad_cents`) agrège `cashpad_receipts_snapshot` (≈ 454 MB, JSONB `raw_payload`) et coûtait ~2,4 s **à chaque chargement** (Seq Scan complet). La RPC prend désormais un 4ᵉ paramètre `p_include_cashpad boolean DEFAULT false` : **désactivé** (défaut), la CTE `cashpad_pm` est court-circuitée (driver vide → snapshot **jamais lu**) et ces colonnes renvoient `NULL` → page en ~50 ms ; **activé**, l'agrégation est calculée via `CROSS JOIN LATERAL` par clôture (utilise `idx_crs_establishment_closed` au lieu d'un Seq Scan, ~0,25 s à chaud). UI : checkbox **« Comparaison Cashpad »** dans la barre de filtres (off par défaut, spinner pendant le fetch) ; `showCashpad` pilote à la fois le param service `getAnalyticsTimeline(..., includeCashpad)`, la query key (`analyticsKeys.timeline`) et le masquage des lignes Cashpad dans `timeline-table.tsx` (métriques taguées `cashpad`, séparateurs de blocs recalculés dynamiquement). La signature RPC a changé → l'ancienne 3-arg a été **DROP**.
 
+**`/users/[id]`** : découpée (juin 2026). La page (`page.tsx`, ~190 lignes) ne garde que les queries racine (`getUserWithStats` → `userKeys.detail(id)`, `getUserFullStats` → `[...userKeys.detail(id), "fullStats"]`, établissements), l'en-tête et la navigation par onglets. Le rendu vit dans `users/[id]/_components/` — `overview-tab.tsx` (profil + QR code), `activity-tab.tsx` (stats de période + graphique Recharts + table de progression des quêtes), `gains-tab.tsx` (ligne cliquable vers la quête sur les gains `bonus_cashback_quest`), `coupons-tab.tsx`, `receipts-tab.tsx` (suppression de ticket : AlertDialog + RPC `admin_delete_receipt`), `edit-tab.tsx` (édition profil + zone dangereuse RGPD, state initialisé depuis les props) — plus les transverses `user-stats-cards.tsx`, `user-role-badge.tsx`, `table-pagination.tsx` et `types.ts` (`UserDetail`/`mapUserDetail`, `USER_DETAIL_PAGE_SIZE`). Chaque onglet fetch ses données en `useQuery` sous une clé dérivée `[...userKeys.detail(id), "gains" | "receipts" | …]` (Radix démonte les onglets inactifs → le lazy-load par onglet est conservé) ; toutes les mutations (suppression ticket, update profil, anonymisation RGPD) invalident `userKeys.all`. EmptyState + StatusBadge (statuts quêtes/coupons) adoptés.
+
 ### Data fetching — TanStack React Query
 
 `QueryProvider` dans `src/app/layout.tsx` (staleTime 30s, retry 1, no refetchOnWindowFocus). Query keys factories : `src/lib/queries/keys.ts` par domaine.
 
 **Règle** : toute mutation qui change un listing **doit** invalider `xxxKeys.all` du domaine, sinon stale jusqu'à 30s.
 
-Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026). Reste en `useEffect+useState` : le listing `/quests` (909 lignes, PR dédiée) et les pages détail `content/*/[id]`.
+Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026), `users/[id]` (onglets du détail, juin 2026). Reste en `useEffect+useState` : le listing `/quests` (909 lignes, PR dédiée) et les pages détail `content/*/[id]`.
 
 ### Conversion target_value des quêtes — piège récurrent
 
@@ -280,7 +282,7 @@ queryClient.invalidateQueries({ queryKey: questKeys.all });
 
 **Règle** : toute mutation qui change le contenu d'un listing **doit** invalider la query key `xxxKeys.all` du domaine pour que la liste se rafraîchisse au retour. Sans ça, l'utilisateur voit du stale jusqu'à 30s.
 
-**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`. Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
+**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`, `users/[id]` (onglets du détail). Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
 
 ### Conversion target_value des quêtes — piège récurrent
 
