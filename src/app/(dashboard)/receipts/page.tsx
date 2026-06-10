@@ -10,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -27,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -360,6 +360,138 @@ export default function ReceiptsPage() {
 
   const totalPages = Math.ceil(total / limit);
 
+  const columns: DataTableColumn<ReceiptWithDetails>[] = [
+    {
+      key: "id",
+      header: "ID",
+      sortable: true,
+      sortValue: (receipt) => receipt.id,
+      cellClassName: "font-mono text-sm",
+      cell: (receipt) => (
+        <div className="flex items-center gap-2">
+          #{receipt.id}
+          {receipt.cashpad_reconciliation && (
+            <ReconciliationBadge status={receipt.cashpad_reconciliation.status} />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "customer",
+      header: "Client",
+      sortable: true,
+      sortValue: (receipt) =>
+        receipt.customer
+          ? `${receipt.customer.first_name || ""} ${receipt.customer.last_name || ""}`.trim() ||
+            receipt.customer.email
+          : null,
+      cell: (receipt) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Link
+            href={`/users/${receipt.customer_id}`}
+            className="font-medium hover:underline"
+          >
+            {receipt.customer
+              ? `${receipt.customer.first_name || ""} ${
+                  receipt.customer.last_name || ""
+                }`.trim() || receipt.customer.email
+              : "Inconnu"}
+          </Link>
+          <p className="text-sm text-muted-foreground">
+            {receipt.customer?.email}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "establishment",
+      header: "Établissement",
+      sortable: true,
+      sortValue: (receipt) => getEstablishmentName(receipt.establishment_id),
+      cell: (receipt) => getEstablishmentName(receipt.establishment_id),
+    },
+    {
+      key: "amount",
+      header: "Montant",
+      sortable: true,
+      sortValue: (receipt) => receipt.amount,
+      cell: (receipt) => {
+        const dominantMethod =
+          receipt.receipt_lines && receipt.receipt_lines.length > 0
+            ? receipt.receipt_lines.reduce((max, line) =>
+                line.amount > max.amount ? line : max
+              ).payment_method
+            : null;
+        const amountConfig = dominantMethod
+          ? getPaymentMethodConfig(dominantMethod)
+          : null;
+        return (
+          <Badge
+            variant="outline"
+            className={cn("font-semibold", amountConfig?.badgeClass)}
+          >
+            {formatCurrency(receipt.amount)}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "payment",
+      header: "Paiement",
+      cell: (receipt) => (
+        <div className="flex flex-wrap gap-1">
+          {receipt.receipt_lines && receipt.receipt_lines.length > 0 ? (
+            [...new Set(receipt.receipt_lines.map((line) => line.payment_method))].map(
+              (method) => {
+                const config = getPaymentMethodConfig(method);
+                return (
+                  <Badge
+                    key={method}
+                    variant="outline"
+                    className={cn("flex items-center gap-1", config.badgeClass)}
+                  >
+                    {config.icon}
+                    {config.label}
+                  </Badge>
+                );
+              }
+            )
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "consumptions",
+      header: "Consommations",
+      cell: (receipt) => (
+        <div className="flex flex-wrap gap-1">
+          {receipt.receipt_consumption_items &&
+          receipt.receipt_consumption_items.length > 0 ? (
+            receipt.receipt_consumption_items.map((item) => (
+              <Badge key={item.id} variant="outline">
+                {item.quantity}x{" "}
+                {consumptionTypeLabels[item.consumption_type] ||
+                  item.consumption_type}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Date",
+      sortable: true,
+      sortValue: (receipt) => receipt.created_at,
+      cellClassName: "text-sm text-muted-foreground",
+      cell: (receipt) => formatDateTime(receipt.created_at),
+    },
+  ];
+
   return (
     <div className="flex h-full flex-col gap-6">
       <PageHeader
@@ -554,163 +686,19 @@ export default function ReceiptsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col md:overflow-hidden">
-          {receiptsQuery.isLoading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Loader2
-                className="h-6 w-6 animate-spin text-muted-foreground"
-                aria-hidden="true"
-              />
-            </div>
-          ) : receipts.length === 0 ? (
-            <EmptyState icon={Receipt} title="Aucun ticket trouvé" />
-          ) : (
-            <>
-              <div className="min-h-0 flex-1 md:overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Établissement</TableHead>
-                      <TableHead>Montant</TableHead>
-                      <TableHead>Paiement</TableHead>
-                      <TableHead>Consommations</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                  {receipts.map((receipt) => {
-                    const dominantMethod =
-                      receipt.receipt_lines && receipt.receipt_lines.length > 0
-                        ? receipt.receipt_lines.reduce((max, line) =>
-                            line.amount > max.amount ? line : max
-                          ).payment_method
-                        : null;
-                    const amountConfig = dominantMethod
-                      ? getPaymentMethodConfig(dominantMethod)
-                      : null;
-                    const reconciliation = receipt.cashpad_reconciliation ?? null;
-                    return (
-                    <TableRow
-                      key={receipt.id}
-                      onClick={() => setSelectedReceipt(receipt)}
-                      className="cursor-pointer hover:bg-muted/40"
-                    >
-                      <TableCell className="font-mono text-sm">
-                        <div className="flex items-center gap-2">
-                          #{receipt.id}
-                          {reconciliation && (
-                            <ReconciliationBadge status={reconciliation.status} />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div>
-                          <Link
-                            href={`/users/${receipt.customer_id}`}
-                            className="font-medium hover:underline"
-                          >
-                            {receipt.customer
-                              ? `${receipt.customer.first_name || ""} ${
-                                  receipt.customer.last_name || ""
-                                }`.trim() || receipt.customer.email
-                              : "Inconnu"}
-                          </Link>
-                          <p className="text-sm text-muted-foreground">
-                            {receipt.customer?.email}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getEstablishmentName(receipt.establishment_id)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "font-semibold",
-                            amountConfig?.badgeClass
-                          )}
-                        >
-                          {formatCurrency(receipt.amount)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {receipt.receipt_lines && receipt.receipt_lines.length > 0 ? (
-                            [...new Set(receipt.receipt_lines.map((line) => line.payment_method))].map(
-                              (method) => {
-                                const config = getPaymentMethodConfig(method);
-                                return (
-                                  <Badge
-                                    key={method}
-                                    variant="outline"
-                                    className={cn("flex items-center gap-1", config.badgeClass)}
-                                  >
-                                    {config.icon}
-                                    {config.label}
-                                  </Badge>
-                                );
-                              }
-                            )
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {receipt.receipt_consumption_items && receipt.receipt_consumption_items.length > 0 ? (
-                            receipt.receipt_consumption_items.map((item) => (
-                              <Badge key={item.id} variant="outline">
-                                {item.quantity}x {consumptionTypeLabels[item.consumption_type] || item.consumption_type}
-                              </Badge>
-                            ))
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDateTime(receipt.created_at)}
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {totalPages > 1 && (
-                <div className="mt-4 flex shrink-0 items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Page {page + 1} sur {totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page === 0}
-                      aria-label="Page précédente"
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Précédent
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= totalPages - 1}
-                      aria-label="Page suivante"
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Suivant
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
+            <DataTable
+              columns={columns}
+              data={receipts}
+              rowKey={(receipt) => receipt.id}
+              loading={receiptsQuery.isLoading}
+              onRowClick={(receipt) => setSelectedReceipt(receipt)}
+              rowClassName="hover:bg-muted/40"
+              className="min-h-0 flex-1 md:overflow-hidden"
+              containerClassName="min-h-0 flex-1 md:overflow-y-auto"
+              emptyState={<EmptyState icon={Receipt} title="Aucun ticket trouvé" />}
+              pagination={{ page, totalPages, onPageChange: setPage }}
+            />
+          </CardContent>
       </Card>
       </div>
 

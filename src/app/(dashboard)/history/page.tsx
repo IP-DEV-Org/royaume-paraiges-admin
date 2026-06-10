@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -18,15 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { History, Loader2 } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { History } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getDistributionLogs } from "@/lib/services/couponService";
@@ -68,6 +60,89 @@ export default function HistoryPage() {
   const total = logsQuery.data?.count ?? 0;
   const totalPages = Math.ceil(total / limit);
 
+  const columns: DataTableColumn<LogWithRelations>[] = [
+    {
+      key: "distributed_at",
+      header: "Date",
+      sortable: true,
+      sortValue: (log) => log.distributed_at,
+      cellClassName: "text-sm",
+      cell: (log) =>
+        log.distributed_at ? formatDateTime(log.distributed_at) : "-",
+    },
+    {
+      key: "type",
+      header: "Type",
+      cell: (log) => (
+        <Badge variant="outline">
+          {log.distribution_type === "manual" && "Manuel"}
+          {log.distribution_type?.startsWith("leaderboard") && "Leaderboard"}
+        </Badge>
+      ),
+    },
+    {
+      key: "period",
+      header: "Période",
+      sortable: true,
+      sortValue: (log) => log.period_identifier,
+      cellClassName: "font-mono text-sm",
+      cell: (log) => log.period_identifier || "-",
+    },
+    {
+      key: "user",
+      header: "Utilisateur",
+      sortable: true,
+      sortValue: (log) =>
+        log.profiles
+          ? `${log.profiles.first_name || ""} ${log.profiles.last_name || ""}`.trim() ||
+            log.profiles.email
+          : null,
+      cell: (log) => (
+        <div>
+          <p className="font-medium">
+            {log.profiles
+              ? `${log.profiles.first_name || ""} ${log.profiles.last_name || ""}`.trim() ||
+                log.profiles.email
+              : "Inconnu"}
+          </p>
+          <p className="text-xs text-muted-foreground">{log.profiles?.email}</p>
+        </div>
+      ),
+    },
+    {
+      key: "rank",
+      header: "Rang",
+      sortable: true,
+      sortValue: (log) => log.rank,
+      cell: (log) =>
+        log.rank ? (
+          <Badge variant={log.rank <= 3 ? "default" : "secondary"}>
+            #{log.rank}
+          </Badge>
+        ) : (
+          "-"
+        ),
+    },
+    {
+      key: "tier",
+      header: "Palier",
+      cell: (log) => log.reward_tiers?.name || "-",
+    },
+    {
+      key: "template",
+      header: "Template",
+      cell: (log) => log.coupon_templates?.name || "-",
+    },
+    {
+      key: "xp",
+      header: "XP",
+      sortable: true,
+      sortValue: (log) => log.xp_at_distribution,
+      cellClassName: "text-muted-foreground",
+      cell: (log) => log.xp_at_distribution?.toLocaleString() || "-",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -105,108 +180,16 @@ export default function HistoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {logsQuery.isLoading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Loader2
-                className="h-6 w-6 animate-spin text-muted-foreground"
-                aria-hidden="true"
-              />
-            </div>
-          ) : logs.length === 0 ? (
-            <EmptyState icon={History} title="Aucune distribution trouvée" />
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Période</TableHead>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Rang</TableHead>
-                    <TableHead>Palier</TableHead>
-                    <TableHead>Template</TableHead>
-                    <TableHead>XP</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-sm">
-                        {log.distributed_at ? formatDateTime(log.distributed_at) : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {log.distribution_type === "manual" && "Manuel"}
-                          {log.distribution_type?.startsWith("leaderboard") &&
-                            "Leaderboard"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {log.period_identifier || "-"}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">
-                            {log.profiles
-                              ? `${log.profiles.first_name || ""} ${
-                                  log.profiles.last_name || ""
-                                }`.trim() || log.profiles.email
-                              : "Inconnu"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {log.profiles?.email}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {log.rank ? (
-                          <Badge variant={log.rank <= 3 ? "default" : "secondary"}>
-                            #{log.rank}
-                          </Badge>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>{log.reward_tiers?.name || "-"}</TableCell>
-                      <TableCell>{log.coupon_templates?.name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {log.xp_at_distribution?.toLocaleString() || "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Page {page + 1} sur {totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page === 0}
-                      aria-label="Page précédente"
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Précédent
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= totalPages - 1}
-                      aria-label="Page suivante"
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Suivant
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          <DataTable
+            columns={columns}
+            data={logs}
+            rowKey={(log) => log.id}
+            loading={logsQuery.isLoading}
+            emptyState={
+              <EmptyState icon={History} title="Aucune distribution trouvée" />
+            }
+            pagination={{ page, totalPages, onPageChange: setPage }}
+          />
         </CardContent>
       </Card>
     </div>

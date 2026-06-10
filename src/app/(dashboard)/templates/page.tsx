@@ -17,14 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,13 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
-import {
-  Plus,
-  MoreHorizontal,
-  Trash2,
-  Copy,
-  Loader2,
-} from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -112,13 +99,118 @@ export default function TemplatesPage() {
     onSettled: () => setDeleteId(null),
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
-      </div>
-    );
-  }
+  const columns: DataTableColumn<CouponTemplate>[] = [
+    {
+      key: "name",
+      header: "Nom",
+      sortable: true,
+      sortValue: (template) => template.name,
+      cell: (template) => (
+        <div>
+          <p className="font-medium">{template.name}</p>
+          {template.description && (
+            <p className="text-sm text-muted-foreground">{template.description}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      cell: (template) =>
+        template.amount ? (
+          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+            Bonus Cashback
+          </Badge>
+        ) : template.percentage ? (
+          <Badge variant="secondary">Coupon</Badge>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "value",
+      header: "Valeur",
+      sortable: true,
+      sortValue: (template) => template.amount ?? template.percentage,
+      cell: (template) =>
+        template.amount ? (
+          <Badge variant="default">{formatCurrency(template.amount)}</Badge>
+        ) : template.percentage ? (
+          <Badge variant="secondary">{formatPercentage(template.percentage)}</Badge>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "validity",
+      header: "Validité",
+      sortable: true,
+      sortValue: (template) => template.validity_days,
+      cell: (template) =>
+        template.validity_days ? (
+          <span>{template.validity_days} jours</span>
+        ) : (
+          <span className="text-muted-foreground">Sans expiration</span>
+        ),
+    },
+    {
+      key: "active",
+      header: "Actif",
+      cell: (template) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Switch
+            aria-label={`Activer ou désactiver le template ${template.name}`}
+            checked={template.is_active ?? false}
+            onCheckedChange={(checked) =>
+              toggleMutation.mutate({ id: template.id, isActive: checked })
+            }
+            disabled={toggleMutation.isPending}
+          />
+        </div>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Créé le",
+      sortable: true,
+      sortValue: (template) => template.created_at,
+      cellClassName: "text-muted-foreground",
+      cell: (template) =>
+        template.created_at ? formatDate(template.created_at) : "-",
+    },
+    {
+      key: "actions",
+      header: "",
+      headerClassName: "w-[50px]",
+      cell: (template) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Actions du template">
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <Link href={`/templates/create?duplicate=${template.id}`}>
+                <DropdownMenuItem>
+                  <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Dupliquer
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => setDeleteId(template.id)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                Supprimer
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -143,133 +235,25 @@ export default function TemplatesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {templates.length === 0 ? (
-            <EmptyState
-              icon={Copy}
-              title="Aucun template"
-              description="Créez-en un pour commencer."
-              action={
-                <Button asChild>
-                  <Link href="/templates/create">Créer un template</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Valeur</TableHead>
-                  <TableHead>Validité</TableHead>
-                  <TableHead>Actif</TableHead>
-                  <TableHead>Créé le</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {templates.map((template) => (
-                  <TableRow
-                    key={template.id}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/templates/${template.id}`)}
-                  >
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{template.name}</p>
-                        {template.description && (
-                          <p className="text-sm text-muted-foreground">
-                            {template.description}
-                          </p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {template.amount ? (
-                        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-                          Bonus Cashback
-                        </Badge>
-                      ) : template.percentage ? (
-                        <Badge variant="secondary">Coupon</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {template.amount ? (
-                        <Badge variant="default">
-                          {formatCurrency(template.amount)}
-                        </Badge>
-                      ) : template.percentage ? (
-                        <Badge variant="secondary">
-                          {formatPercentage(template.percentage)}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {template.validity_days ? (
-                        <span>{template.validity_days} jours</span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          Sans expiration
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Switch
-                        aria-label={`Activer ou désactiver le template ${template.name}`}
-                        checked={template.is_active ?? false}
-                        onCheckedChange={(checked) =>
-                          toggleMutation.mutate({
-                            id: template.id,
-                            isActive: checked,
-                          })
-                        }
-                        disabled={toggleMutation.isPending}
-                      />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {template.created_at
-                        ? formatDate(template.created_at)
-                        : "-"}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Actions du template"
-                          >
-                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <Link
-                            href={`/templates/create?duplicate=${template.id}`}
-                          >
-                            <DropdownMenuItem>
-                              <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
-                              Dupliquer
-                            </DropdownMenuItem>
-                          </Link>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => setDeleteId(template.id)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                            Supprimer
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <DataTable
+            columns={columns}
+            data={templates}
+            rowKey={(template) => template.id}
+            loading={isLoading}
+            onRowClick={(template) => router.push(`/templates/${template.id}`)}
+            emptyState={
+              <EmptyState
+                icon={Copy}
+                title="Aucun template"
+                description="Créez-en un pour commencer."
+                action={
+                  <Button asChild>
+                    <Link href="/templates/create">Créer un template</Link>
+                  </Button>
+                }
+              />
+            }
+          />
         </CardContent>
       </Card>
 
