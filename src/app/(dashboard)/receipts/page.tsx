@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   Card,
@@ -11,7 +12,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -34,23 +34,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
-  Loader2,
-  Receipt,
-  TrendingUp,
-} from "lucide-react";
+import { Loader2, Receipt, TrendingUp } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   getReceipts,
   getReceiptStats,
   type ReceiptFilters,
   type ReceiptWithDetails,
 } from "@/lib/services/receiptService";
-import { getEstablishments, type Establishment } from "@/lib/services/contentService";
+import { getEstablishments } from "@/lib/services/contentService";
+import { establishmentKeys, receiptKeys } from "@/lib/queries/keys";
 import { cn, formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { getPaymentMethodConfig } from "@/lib/payment-methods";
+import { toast } from "sonner";
 import type { ReconciliationStatus } from "@/types/database";
 
 function startOfCurrentMonthIso(): string {
@@ -59,7 +57,6 @@ function startOfCurrentMonthIso(): string {
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 }
-import { useToast } from "@/components/ui/use-toast";
 
 const consumptionTypeLabels: Record<string, string> = {
   cocktail: "Cocktail",
@@ -71,34 +68,12 @@ const consumptionTypeLabels: Record<string, string> = {
 };
 
 function ReconciliationBadge({ status }: { status: ReconciliationStatus }) {
-  if (status === "matched") {
-    return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400">
-        <CheckCircle2 className="mr-1 h-3 w-3" />
-        Réconcilié
-      </Badge>
-    );
-  }
-  if (status === "orphan_royaume") {
-    return (
-      <Badge className="bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400">
-        <AlertTriangle className="mr-1 h-3 w-3" />
-        Orphelin
-      </Badge>
-    );
-  }
-  if (status === "excluded_cashback") {
-    return (
-      <Badge className="bg-slate-500/15 text-slate-700 hover:bg-slate-500/20 dark:text-slate-300">
-        100% PdB
-      </Badge>
-    );
-  }
+  // Registre central status-badge, libellé local conservé pour "matched".
   return (
-    <Badge className="bg-violet-500/15 text-violet-700 hover:bg-violet-500/20 dark:text-violet-400">
-      <HelpCircle className="mr-1 h-3 w-3" />
-      Ambigu
-    </Badge>
+    <StatusBadge
+      status={status}
+      label={status === "matched" ? "Réconcilié" : undefined}
+    />
   );
 }
 
@@ -332,54 +307,51 @@ function ReceiptDetailsDialog({
   );
 }
 
+const limit = 20;
+
 export default function ReceiptsPage() {
-  const [receipts, setReceipts] = useState<ReceiptWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<ReceiptFilters>({});
-  const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithDetails | null>(
     null
   );
-  const [stats, setStats] = useState<{
-    totalReceipts: number;
-    totalRevenue: number;
-    averageAmount: number;
-    receiptsThisMonth: number;
-    revenueThisMonth: number;
-    paymentMethodBreakdown: { method: string; total: number; count: number }[];
-  } | null>(null);
-  const { toast } = useToast();
 
-  const limit = 20;
+  const receiptsQuery = useQuery({
+    queryKey: receiptKeys.list({
+      page,
+      limit,
+      ...(filters as Record<string, unknown>),
+    }),
+    queryFn: () => getReceipts(filters, limit, page * limit),
+    placeholderData: (prev) => prev,
+  });
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [receiptsResult, statsResult, establishmentsResult] = await Promise.all([
-        getReceipts(filters, limit, page * limit),
-        getReceiptStats(),
-        getEstablishments(),
-      ]);
-      setReceipts(receiptsResult.data);
-      setTotal(receiptsResult.count);
-      setStats(statsResult);
-      setEstablishments(establishmentsResult);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: "Impossible de charger les tickets de caisse",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, page, toast]);
+  const statsQuery = useQuery({
+    queryKey: [...receiptKeys.all, "stats"],
+    queryFn: getReceiptStats,
+  });
+
+  const establishmentsQuery = useQuery({
+    queryKey: establishmentKeys.lists(),
+    queryFn: getEstablishments,
+  });
+
+  const loadError =
+    receiptsQuery.error || statsQuery.error || establishmentsQuery.error;
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (loadError) {
+      console.error(loadError);
+      toast.error("Erreur", {
+        description: "Impossible de charger les tickets de caisse",
+      });
+    }
+  }, [loadError]);
+
+  const receipts = receiptsQuery.data?.data ?? [];
+  const total = receiptsQuery.data?.count ?? 0;
+  const stats = statsQuery.data ?? null;
+  const establishments = establishmentsQuery.data ?? [];
 
   const getEstablishmentName = (id: number) => {
     const establishment = establishments.find((e) => e.id === id);
@@ -390,12 +362,10 @@ export default function ReceiptsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold">Tickets de caisse</h1>
-        <p className="text-muted-foreground">
-          Visualisation des transactions clients
-        </p>
-      </div>
+      <PageHeader
+        title="Tickets de caisse"
+        description="Visualisation des transactions clients"
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row">
         <aside className="space-y-6 md:h-full md:w-80 md:shrink-0 md:overflow-y-auto md:pr-1">
@@ -410,7 +380,10 @@ export default function ReceiptsPage() {
                     <CardTitle className="text-xs font-medium text-muted-foreground">
                       Total tickets
                     </CardTitle>
-                    <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Receipt
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
                     <div className="text-xl font-bold">{stats.totalReceipts}</div>
@@ -421,7 +394,10 @@ export default function ReceiptsPage() {
                     <CardTitle className="text-xs font-medium text-muted-foreground">
                       CA total
                     </CardTitle>
-                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TrendingUp
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
                     <div className="text-xl font-bold">
@@ -434,7 +410,10 @@ export default function ReceiptsPage() {
                     <CardTitle className="text-xs font-medium text-muted-foreground">
                       Panier moyen
                     </CardTitle>
-                    <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Receipt
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
                     <div className="text-xl font-bold">
@@ -468,7 +447,10 @@ export default function ReceiptsPage() {
                   <CardTitle className="text-xs font-medium text-muted-foreground">
                     CA ce mois
                   </CardTitle>
-                  <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  <TrendingUp
+                    className="h-3.5 w-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </CardHeader>
                 <CardContent className="p-3 pt-0">
                   <div className="text-xl font-bold">
@@ -509,10 +491,15 @@ export default function ReceiptsPage() {
                     >
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
                         <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                          <span className={cn("h-2 w-2 rounded-full", config.dotClass)} />
+                          <span
+                            className={cn("h-2 w-2 rounded-full", config.dotClass)}
+                            aria-hidden="true"
+                          />
                           {config.label}
                         </CardTitle>
-                        <span className={config.iconColor}>{config.icon}</span>
+                        <span className={config.iconColor} aria-hidden="true">
+                          {config.icon}
+                        </span>
                       </CardHeader>
                       <CardContent className="p-3 pt-0">
                         <div className="text-xl font-bold">{formatCurrency(item.total)}</div>
@@ -567,14 +554,15 @@ export default function ReceiptsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col md:overflow-hidden">
-          {loading ? (
+          {receiptsQuery.isLoading ? (
             <div className="flex h-32 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2
+                className="h-6 w-6 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
             </div>
           ) : receipts.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Aucun ticket trouvé
-            </div>
+            <EmptyState icon={Receipt} title="Aucun ticket trouvé" />
           ) : (
             <>
               <div className="min-h-0 flex-1 md:overflow-y-auto">
@@ -703,6 +691,7 @@ export default function ReceiptsPage() {
                       variant="outline"
                       size="sm"
                       disabled={page === 0}
+                      aria-label="Page précédente"
                       onClick={() => setPage(page - 1)}
                     >
                       Précédent
@@ -711,6 +700,7 @@ export default function ReceiptsPage() {
                       variant="outline"
                       size="sm"
                       disabled={page >= totalPages - 1}
+                      aria-label="Page suivante"
                       onClick={() => setPage(page + 1)}
                     >
                       Suivant

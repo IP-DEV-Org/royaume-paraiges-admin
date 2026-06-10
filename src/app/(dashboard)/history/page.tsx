@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -25,10 +26,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
+import { History, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getDistributionLogs } from "@/lib/services/couponService";
+import { historyKeys } from "@/lib/queries/keys";
 import { formatDateTime } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { CouponDistributionLog } from "@/types/database";
 
 type LogWithRelations = CouponDistributionLog & {
@@ -37,49 +41,39 @@ type LogWithRelations = CouponDistributionLog & {
   reward_tiers: { name: string } | null;
 };
 
+const limit = 30;
+
 export default function HistoryPage() {
-  const [logs, setLogs] = useState<LogWithRelations[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
-  const [filters, setFilters] = useState<{
-    distributionType?: string;
-  }>({});
-  const { toast } = useToast();
+  const [distributionType, setDistributionType] = useState<string | undefined>(
+    undefined
+  );
 
-  const limit = 30;
-
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, count } = await getDistributionLogs(limit, page * limit, filters);
-      setLogs(data as LogWithRelations[]);
-      setTotal(count || 0);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: "Impossible de charger l'historique",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [page, filters, toast]);
+  const logsQuery = useQuery({
+    queryKey: historyKeys.list({ page, limit, distributionType }),
+    queryFn: () => getDistributionLogs(limit, page * limit, { distributionType }),
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    if (logsQuery.error) {
+      console.error(logsQuery.error);
+      toast.error("Erreur", {
+        description: "Impossible de charger l'historique",
+      });
+    }
+  }, [logsQuery.error]);
 
+  const logs = (logsQuery.data?.data ?? []) as LogWithRelations[];
+  const total = logsQuery.data?.count ?? 0;
   const totalPages = Math.ceil(total / limit);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Historique</h1>
-        <p className="text-muted-foreground">
-          Journal des distributions de coupons
-        </p>
-      </div>
+      <PageHeader
+        title="Historique"
+        description="Journal des distributions de coupons"
+      />
 
       <Card>
         <CardHeader>
@@ -91,13 +85,10 @@ export default function HistoryPage() {
               </CardDescription>
             </div>
             <Select
-              value={filters.distributionType || "all"}
+              value={distributionType || "all"}
               onValueChange={(value) => {
                 setPage(0);
-                setFilters({
-                  ...filters,
-                  distributionType: value === "all" ? undefined : value,
-                });
+                setDistributionType(value === "all" ? undefined : value);
               }}
             >
               <SelectTrigger className="w-[150px] shrink-0 sm:w-[200px]">
@@ -114,14 +105,15 @@ export default function HistoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {logsQuery.isLoading ? (
             <div className="flex h-32 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2
+                className="h-6 w-6 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
             </div>
           ) : logs.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Aucune distribution trouvée
-            </div>
+            <EmptyState icon={History} title="Aucune distribution trouvée" />
           ) : (
             <>
               <Table>
@@ -129,7 +121,7 @@ export default function HistoryPage() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Periode</TableHead>
+                    <TableHead>Période</TableHead>
                     <TableHead>Utilisateur</TableHead>
                     <TableHead>Rang</TableHead>
                     <TableHead>Palier</TableHead>
@@ -196,6 +188,7 @@ export default function HistoryPage() {
                       variant="outline"
                       size="sm"
                       disabled={page === 0}
+                      aria-label="Page précédente"
                       onClick={() => setPage(page - 1)}
                     >
                       Précédent
@@ -204,6 +197,7 @@ export default function HistoryPage() {
                       variant="outline"
                       size="sm"
                       disabled={page >= totalPages - 1}
+                      aria-label="Page suivante"
                       onClick={() => setPage(page + 1)}
                     >
                       Suivant
