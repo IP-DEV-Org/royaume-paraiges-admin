@@ -57,7 +57,7 @@ Toujours utiliser ces composants plutôt que de réécrire le pattern localement
 
 **`/content/beers`** et **`/content/establishments`** : simplifiés (mai 2026). Cartes stats "Source: Supabase" supprimées (purement noise), `IBU moyen` retirée. Migration TanStack Query + sonner. Pages volontairement légères (lecture seule) : recherche + table + dialog réciproque (bières ↔ établissements).
 
-**`/quests`** : refonte en vue calendaire « En ce moment » (mai 2026). Plus d'onglets type-période ni de pills Actuelles/À venir/Archives. Layout : **3 colonnes** Semaine / Mois / Année affichées simultanément, chacune avec sa **frise temporelle cliquable** (périodes issues de `quest_periods` ∪ période courante, triées ; bouton *Aujourd'hui* pour revenir au présent). Une période sélectionnée passée affiche la **participation** (`getQuestProgressStatsForPeriod`, scopée `quest_progress.period_identifier`) ; présente/future affiche le toggle actif + duplication. Les quêtes **sans planning** (`quest_periods` vide) sont sorties dans une **section « Permanentes »** dédiée (groupée par type), badgées *En continu* si actives. Filtre **Inactives** (caché par défaut) dans le header. Cartes compactes cliquables → détail. Outils CSV (template / export / import) toujours dans le dropdown **Outils** ; dialog d'import et `QuestConflictDialog` toujours gérés dans la page. TanStack Query + sonner.
+**`/quests`** : refonte en vue calendaire « En ce moment » (mai 2026). Plus d'onglets type-période ni de pills Actuelles/À venir/Archives. Layout : **3 colonnes** Semaine / Mois / Année affichées simultanément, chacune avec sa **frise temporelle cliquable** (périodes issues de `quest_periods` ∪ période courante, triées ; bouton *Aujourd'hui* pour revenir au présent). Une période sélectionnée passée affiche la **participation** (`getQuestProgressStatsForPeriod`, scopée `quest_progress.period_identifier`) ; présente/future affiche le toggle actif + duplication. Les quêtes **sans planning** (`quest_periods` vide) sont sorties dans une **section « Permanentes »** dédiée (groupée par type), badgées *En continu* si actives. Filtre **Inactives** (caché par défaut) dans le header. Cartes compactes cliquables → détail. Outils CSV (template / export / import) toujours dans le dropdown **Outils** ; dialog d'import et `QuestConflictDialog` toujours gérés dans la page. TanStack Query + sonner. **Découpage (juin 2026)** : la page (`page.tsx`, ~400 lignes) ne garde que l'orchestration (state anchor/filtres, queries, mutations, handlers CSV) ; le rendu vit dans `quests/_components/` — `period-section.tsx` (ligne période + frise), `permanent-quests-section.tsx`, `quest-card.tsx` (carte compacte + récompenses + participation), `import-csv-dialog.tsx`, plus les helpers `quest-display.ts` (labels/icônes/unités) et `period-anchor.ts` (`periodToAnchor`, `shortPeriodLabel`). PageHeader + EmptyState adoptés.
 
 **`/coupons/create`** : formulaire simplifié (mai 2026). Plus de notion de "mode template / custom" — toujours saisie directe : radios *Bonus cashback (€) / Coupon (%)* puis un seul champ. Les `coupon_templates` restent en BDD et continuent d'alimenter la distribution leaderboard (`/rewards/distribute`) ainsi que `/templates`, mais ne sont plus exposés dans le flux de création manuelle d'un coupon.
 
@@ -71,7 +71,7 @@ Toujours utiliser ces composants plutôt que de réécrire le pattern localement
 
 **Règle** : toute mutation qui change un listing **doit** invalider `xxxKeys.all` du domaine, sinon stale jusqu'à 30s.
 
-Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026). Reste en `useEffect+useState` : le listing `/quests` (909 lignes, PR dédiée) et les pages détail `content/*/[id]`.
+Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026). Reste en `useEffect+useState` : les pages détail `content/*/[id]`.
 
 ### Conversion target_value des quêtes — piège récurrent
 
@@ -281,7 +281,7 @@ queryClient.invalidateQueries({ queryKey: questKeys.all });
 
 **Règle** : toute mutation qui change le contenu d'un listing **doit** invalider la query key `xxxKeys.all` du domaine pour que la liste se rafraîchisse au retour. Sans ça, l'utilisateur voit du stale jusqu'à 30s.
 
-**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`. Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
+**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `quests`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`.
 
 ### Conversion target_value des quêtes — piège récurrent
 
@@ -358,5 +358,4 @@ Voir `animation/01-fonctionnel/changelog-anticipe.md` pour la liste complète. C
 - **Cron auto pour la clôture an 2+** : 3 pg_cron + 3 fallbacks à mettre en place après validation manuelle de la saison 2026.
 - **Setup staging propre** : Supabase Branches (option A) à industrialiser. Pour l'instant, les migrations partent direct en prod sur décision Basile.
 - **Modal level-up enrichie** : afficher « Tu gagnes désormais X,Y PdB par € » au franchissement d'un niveau (côté front, mais visualisable depuis l'admin via simulation).
-- **Migrer le listing `/quests` vers TanStack Query** : seul listing admin encore sur `useEffect + useState` (909 lignes). Réutiliser `questKeys` de `src/lib/queries/keys.ts` et invalider `questKeys.all` après les mutations existantes. PR dédiée.
 - **Bug `distribute_period_rewards_v2` ignore `p_period_identifier`** (détecté mai 2026 via tests branche `security-040`). La RPC lit `weekly_xp_leaderboard` / `monthly_xp_leaderboard` / `yearly_xp_leaderboard` telles quelles sans filtrer par `period_identifier`, donc la prévisualisation et la distribution renvoient toujours le leaderboard de la période en cours, peu importe le `p_period_identifier` passé. À fixer : soit reconstruire le leaderboard scopé via une CTE qui filtre `gains.created_at` par les bornes de période (`get_period_bounds`), soit créer des matviews historisées par période. Impact actuel limité : la feature de distribution n'est utilisée qu'en temps réel sur la période courante — mais empêche tout rattrapage / re-distribution d'une période passée.
