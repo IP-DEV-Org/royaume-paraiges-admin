@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
   Card,
   CardContent,
@@ -32,61 +36,100 @@ import {
   type Beer,
   type Brewery,
 } from "@/lib/services/contentService";
+import { beerKeys, breweryKeys } from "@/lib/queries/keys";
 import { toast } from "sonner";
+
+// Schéma UI : inputs string, conversions number au submit
+const formSchema = z.object({
+  title: z.string().min(1, "Le nom est requis"),
+  description: z.string(),
+  ibu: z.string().refine(
+    (v) => {
+      if (!v) return true;
+      const n = parseInt(v, 10);
+      return !isNaN(n) && n >= 0 && n <= 120;
+    },
+    { message: "L'IBU doit être un entier entre 0 et 120." }
+  ),
+  abv: z.string().refine(
+    (v) => {
+      if (!v) return true;
+      const n = parseFloat(v);
+      return !isNaN(n) && n >= 0 && n <= 20;
+    },
+    { message: "L'ABV doit être entre 0 et 20." }
+  ),
+  breweryId: z.string(),
+});
+
+type FormInput = z.infer<typeof formSchema>;
 
 export default function EditBeerPage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
 
-  const [loading, setLoading] = useState(false);
-  const [loadingData, setLoadingData] = useState(true);
-  const [breweries, setBreweries] = useState<Brewery[]>([]);
-  const [currentImagePath, setCurrentImagePath] = useState<string | null>(null);
-  const [newImageFile, setNewImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    ibu: "",
-    abv: "",
-    breweryId: "",
+  const beerQuery = useQuery({
+    queryKey: beerKeys.detail(id),
+    queryFn: () => getBeer(id),
+  });
+  const breweriesQuery = useQuery({
+    queryKey: breweryKeys.lists(),
+    queryFn: getBreweries,
   });
 
+  // getBeer renvoie null si introuvable (le service ne throw pas)
+  const notFound = beerQuery.isSuccess && !beerQuery.data;
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [beer, breweriesData] = await Promise.all([
-          getBeer(id),
-          getBreweries(),
-        ]);
+    if (notFound || beerQuery.isError) {
+      toast.error("Erreur", { description: "Bière introuvable" });
+      router.push("/content/beers");
+    }
+  }, [notFound, beerQuery.isError, router]);
 
-        setBreweries(breweriesData);
+  if (!beerQuery.data || breweriesQuery.isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-        if (beer) {
-          setForm({
-            title: beer.title || "",
-            description: beer.description || "",
-            ibu: beer.ibu?.toString() || "",
-            abv: beer.abv?.toString() || "",
-            breweryId: beer.brewery_id?.toString() || "",
-          });
-          setCurrentImagePath(beer.featured_image);
-        } else {
-          toast.error("Erreur", { description: "Bière introuvable" });
-          router.push("/content/beers");
-        }
-      } catch (error) {
-        toast.error("Erreur", { description: "Impossible de charger la bière" });
-        router.push("/content/beers");
-      } finally {
-        setLoadingData(false);
-      }
-    };
+  return (
+    <BeerForm beer={beerQuery.data} breweries={breweriesQuery.data ?? []} />
+  );
+}
 
-    fetchData();
-  }, [id, router]);
+function BeerForm({ beer, breweries }: { beer: Beer; breweries: Brewery[] }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const currentImagePath = beer.featured_image;
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const form = useForm<FormInput>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      title: beer.title || "",
+      description: beer.description || "",
+      ibu: beer.ibu?.toString() ?? "",
+      abv: beer.abv?.toString() ?? "",
+      breweryId: beer.brewery_id?.toString() ?? "",
+    },
+  });
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = form;
+
+  const title = watch("title");
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -106,9 +149,8 @@ export default function EditBeerPage() {
     setImagePreview(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const submit = handleSubmit(async (values) => {
+    setServerError(null);
 
     try {
       let newImagePath = currentImagePath;
@@ -120,36 +162,32 @@ export default function EditBeerPage() {
           await deleteBeerImage(currentImagePath);
         }
         // Uploader la nouvelle image
-        newImagePath = await uploadBeerImage(id, newImageFile);
+        newImagePath = await uploadBeerImage(beer.id, newImageFile);
       }
 
-      await updateBeer(id, {
-        title: form.title,
-        description: form.description || null,
-        ibu: form.ibu ? parseInt(form.ibu) : null,
-        abv: form.abv ? parseFloat(form.abv) : null,
-        brewery_id: form.breweryId ? parseInt(form.breweryId) : null,
+      await updateBeer(beer.id, {
+        title: values.title,
+        description: values.description || null,
+        ibu: values.ibu ? parseInt(values.ibu, 10) : null,
+        abv: values.abv ? parseFloat(values.abv) : null,
+        brewery_id: values.breweryId ? parseInt(values.breweryId, 10) : null,
         featured_image: newImagePath,
       });
 
+      queryClient.invalidateQueries({ queryKey: beerKeys.all });
       toast.success("Bière mise à jour");
       router.push("/content/beers");
-    } catch (error) {
+    } catch (err) {
+      setServerError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de mettre à jour la bière"
+      );
       toast.error("Erreur", {
         description: "Impossible de mettre à jour la bière",
       });
-    } finally {
-      setLoading(false);
     }
-  };
-
-  if (loadingData) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  });
 
   return (
     <div className="space-y-6">
@@ -161,11 +199,11 @@ export default function EditBeerPage() {
         </Link>
         <div>
           <h1 className="text-3xl font-bold">Modifier la bière</h1>
-          <p className="text-muted-foreground">{form.title}</p>
+          <p className="text-muted-foreground">{title}</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={submit}>
         <Card>
           <CardHeader>
             <CardTitle>Informations de la bière</CardTitle>
@@ -179,10 +217,13 @@ export default function EditBeerPage() {
               <Input
                 id="title"
                 placeholder="Ex: Blonde des Paraiges"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                required
+                {...register("title")}
               />
+              {errors.title && (
+                <p className="text-xs text-destructive">
+                  {errors.title.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -190,34 +231,40 @@ export default function EditBeerPage() {
               <Textarea
                 id="description"
                 placeholder="Description de la bière"
-                value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
                 rows={4}
+                {...register("description")}
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="brewery">Brasserie</Label>
-              <Select
-                value={form.breweryId}
-                onValueChange={(value) =>
-                  setForm({ ...form, breweryId: value === "none" ? "" : value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner une brasserie" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Aucune brasserie</SelectItem>
-                  {breweries.map((brewery) => (
-                    <SelectItem key={brewery.id} value={brewery.id.toString()}>
-                      {brewery.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                name="breweryId"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) =>
+                      field.onChange(value === "none" ? "" : value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner une brasserie" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Aucune brasserie</SelectItem>
+                      {breweries.map((brewery) => (
+                        <SelectItem
+                          key={brewery.id}
+                          value={brewery.id.toString()}
+                        >
+                          {brewery.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
 
             <div className="space-y-2">
@@ -283,11 +330,15 @@ export default function EditBeerPage() {
                   id="ibu"
                   type="number"
                   placeholder="Ex: 35"
-                  value={form.ibu}
-                  onChange={(e) => setForm({ ...form, ibu: e.target.value })}
                   min={0}
                   max={120}
+                  {...register("ibu")}
                 />
+                {errors.ibu && (
+                  <p className="text-xs text-destructive">
+                    {errors.ibu.message}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Indice d’amertume (0-120)
                 </p>
@@ -300,16 +351,26 @@ export default function EditBeerPage() {
                   type="number"
                   step="0.1"
                   placeholder="Ex: 5.5"
-                  value={form.abv}
-                  onChange={(e) => setForm({ ...form, abv: e.target.value })}
                   min={0}
                   max={20}
+                  {...register("abv")}
                 />
+                {errors.abv && (
+                  <p className="text-xs text-destructive">
+                    {errors.abv.message}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Pourcentage d’alcool par volume
                 </p>
               </div>
             </div>
+
+            {serverError && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {serverError}
+              </div>
+            )}
 
             <div className="flex justify-end gap-4">
               <Link href="/content/beers">
@@ -317,8 +378,8 @@ export default function EditBeerPage() {
                   Annuler
                 </Button>
               </Link>
-              <Button type="submit" disabled={loading}>
-                {loading && (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 )}
                 Enregistrer

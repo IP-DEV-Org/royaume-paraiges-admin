@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
   Card,
   CardContent,
@@ -50,6 +54,7 @@ import {
   getImageUrl,
   getEstablishmentConsumptionTypes,
   setEstablishmentConsumptionTypes,
+  type Establishment,
 } from "@/lib/services/contentService";
 import type { ConsumptionType } from "@/types/database";
 import { Switch } from "@/components/ui/switch";
@@ -61,6 +66,7 @@ import {
   type DebtsData,
 } from "@/lib/services/analyticsService";
 import { PeriodSelector, getPresetDates, type PeriodDates } from "@/components/period-selector";
+import { establishmentKeys } from "@/lib/queries/keys";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 
@@ -74,41 +80,123 @@ const ALL_CONSUMPTION_TYPES: { type: ConsumptionType; label: string; icon: strin
   { type: "boucherie", label: "Boucherie", icon: "\u{1F969}" },
 ];
 
+// Schéma UI : inputs string, conversions au submit ("" → null)
+const formSchema = z.object({
+  title: z.string().min(1, "Le nom est requis"),
+  shortDescription: z.string().max(150, "150 caractères maximum"),
+  description: z.string(),
+  lineAddress1: z.string(),
+  lineAddress2: z.string(),
+  zipcode: z.string(),
+  city: z.string(),
+  country: z.string(),
+  anniversary: z.string(),
+  consumptionTypes: z.array(z.custom<ConsumptionType>()),
+});
+
+type FormInput = z.infer<typeof formSchema>;
+
 export default function EditEstablishmentPage() {
   const router = useRouter();
   const params = useParams();
   const id = parseInt(params.id as string);
 
-  const [loading, setLoading] = useState(false);
-  const [loadingData, setLoadingData] = useState(true);
+  const establishmentQuery = useQuery({
+    queryKey: establishmentKeys.detail(id),
+    queryFn: () => getEstablishment(id),
+  });
+  // Échec non-bloquant comme avant : fallback "tous actifs" si la query échoue
+  const consumptionTypesQuery = useQuery({
+    queryKey: establishmentKeys.consumptionTypes(id),
+    queryFn: () => getEstablishmentConsumptionTypes(id),
+  });
+
+  // getEstablishment renvoie null si introuvable (le service ne throw pas)
+  const notFound = establishmentQuery.isSuccess && !establishmentQuery.data;
+
+  useEffect(() => {
+    if (notFound || establishmentQuery.isError) {
+      toast.error("Erreur", {
+        description: "Établissement introuvable",
+      });
+      router.push("/content/establishments");
+    }
+  }, [notFound, establishmentQuery.isError, router]);
+
+  if (!establishmentQuery.data || consumptionTypesQuery.isPending) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const ctRows = consumptionTypesQuery.data ?? [];
+  const initialConsumptionTypes =
+    ctRows.length > 0
+      ? ctRows.filter((r) => r.is_active).map((r) => r.consumption_type)
+      : ALL_CONSUMPTION_TYPES.map((ct) => ct.type);
+
+  return (
+    <EstablishmentDetail
+      establishment={establishmentQuery.data}
+      initialConsumptionTypes={initialConsumptionTypes}
+    />
+  );
+}
+
+function EstablishmentDetail({
+  establishment,
+  initialConsumptionTypes,
+}: {
+  establishment: Establishment;
+  initialConsumptionTypes: ConsumptionType[];
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const id = establishment.id;
+
   const [activeTab, setActiveTab] = useState("info");
+  const [serverError, setServerError] = useState<string | null>(null);
 
   // Image principale
-  const [currentFeaturedImage, setCurrentFeaturedImage] = useState<string | null>(null);
+  const currentFeaturedImage = establishment.featured_image;
   const [newFeaturedFile, setNewFeaturedFile] = useState<File | null>(null);
   const [featuredPreview, setFeaturedPreview] = useState<string | null>(null);
 
   // Logo
-  const [currentLogo, setCurrentLogo] = useState<string | null>(null);
+  const currentLogo = establishment.logo;
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // Consumption types (tous actifs par défaut)
-  const [activeConsumptionTypes, setActiveConsumptionTypes] = useState<Set<ConsumptionType>>(
-    new Set(ALL_CONSUMPTION_TYPES.map((ct) => ct.type))
-  );
-
-  const [form, setForm] = useState({
-    title: "",
-    shortDescription: "",
-    description: "",
-    lineAddress1: "",
-    lineAddress2: "",
-    zipcode: "",
-    city: "",
-    country: "",
-    anniversary: "",
+  const form = useForm<FormInput>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      title: establishment.title || "",
+      shortDescription: establishment.short_description || "",
+      description: establishment.description || "",
+      lineAddress1: establishment.line_address_1 || "",
+      lineAddress2: establishment.line_address_2 || "",
+      zipcode: establishment.zipcode || "",
+      city: establishment.city || "",
+      country: establishment.country || "",
+      anniversary: establishment.anniversary
+        ? establishment.anniversary.split("T")[0] ?? ""
+        : "",
+      consumptionTypes: initialConsumptionTypes,
+    },
   });
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = form;
+
+  const title = watch("title");
+  const shortDescription = watch("shortDescription");
 
   // Stats tab state
   const [statsPeriod, setStatsPeriod] = useState<PeriodDates>(() => {
@@ -120,56 +208,6 @@ export default function EditEstablishmentPage() {
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
   const [debtsData, setDebtsData] = useState<DebtsData | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const establishment = await getEstablishment(id);
-
-        if (establishment) {
-          setForm({
-            title: establishment.title || "",
-            shortDescription: establishment.short_description || "",
-            description: establishment.description || "",
-            lineAddress1: establishment.line_address_1 || "",
-            lineAddress2: establishment.line_address_2 || "",
-            zipcode: establishment.zipcode || "",
-            city: establishment.city || "",
-            country: establishment.country || "",
-            anniversary: establishment.anniversary
-              ? establishment.anniversary.split("T")[0] ?? ""
-              : "",
-          });
-          setCurrentFeaturedImage(establishment.featured_image);
-          setCurrentLogo(establishment.logo);
-
-          // Fetch consumption types
-          try {
-            const ctRows = await getEstablishmentConsumptionTypes(id);
-            if (ctRows.length > 0) {
-              setActiveConsumptionTypes(
-                new Set(ctRows.filter((r) => r.is_active).map((r) => r.consumption_type))
-              );
-            }
-          } catch {
-            // Non-blocking
-          }
-        } else {
-          toast.error("Erreur", { description: "Établissement introuvable" });
-          router.push("/content/establishments");
-        }
-      } catch (error) {
-        toast.error("Erreur", {
-          description: "Impossible de charger l'établissement",
-        });
-        router.push("/content/establishments");
-      } finally {
-        setLoadingData(false);
-      }
-    };
-
-    fetchData();
-  }, [id, router]);
 
   // Load employees for this establishment
   useEffect(() => {
@@ -249,9 +287,8 @@ export default function EditEstablishmentPage() {
     setLogoPreview(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const submit = handleSubmit(async (values) => {
+    setServerError(null);
 
     try {
       let newFeaturedPath = currentFeaturedImage;
@@ -274,15 +311,15 @@ export default function EditEstablishmentPage() {
       }
 
       await updateEstablishment(id, {
-        title: form.title,
-        short_description: form.shortDescription || null,
-        description: form.description || null,
-        line_address_1: form.lineAddress1 || null,
-        line_address_2: form.lineAddress2 || null,
-        zipcode: form.zipcode || null,
-        city: form.city || null,
-        country: form.country || null,
-        anniversary: form.anniversary || null,
+        title: values.title,
+        short_description: values.shortDescription || null,
+        description: values.description || null,
+        line_address_1: values.lineAddress1 || null,
+        line_address_2: values.lineAddress2 || null,
+        zipcode: values.zipcode || null,
+        city: values.city || null,
+        country: values.country || null,
+        anniversary: values.anniversary || null,
         featured_image: newFeaturedPath,
         logo: newLogoPath,
       });
@@ -292,28 +329,24 @@ export default function EditEstablishmentPage() {
         id,
         ALL_CONSUMPTION_TYPES.map((ct) => ({
           consumption_type: ct.type,
-          is_active: activeConsumptionTypes.has(ct.type),
+          is_active: values.consumptionTypes.includes(ct.type),
         }))
       );
 
+      queryClient.invalidateQueries({ queryKey: establishmentKeys.all });
       toast.success("Établissement mis à jour");
       router.push("/content/establishments");
-    } catch (error) {
+    } catch (err) {
+      setServerError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de mettre à jour l'établissement"
+      );
       toast.error("Erreur", {
         description: "Impossible de mettre à jour l'établissement",
       });
-    } finally {
-      setLoading(false);
     }
-  };
-
-  if (loadingData) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  });
 
   return (
     <div className="space-y-6">
@@ -328,7 +361,7 @@ export default function EditEstablishmentPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold">{form.title || "Établissement"}</h1>
+          <h1 className="text-3xl font-bold">{title || "Établissement"}</h1>
           <p className="text-muted-foreground">Gestion de l’établissement</p>
         </div>
       </div>
@@ -347,7 +380,7 @@ export default function EditEstablishmentPage() {
 
         {/* Informations Tab - existing edit form */}
         <TabsContent value="info">
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={submit}>
             <Card>
               <CardHeader>
                 <CardTitle>Informations générales</CardTitle>
@@ -361,10 +394,13 @@ export default function EditEstablishmentPage() {
                   <Input
                     id="title"
                     placeholder="Ex: Le Royaume des Paraiges"
-                    value={form.title}
-                    onChange={(e) => setForm({ ...form, title: e.target.value })}
-                    required
+                    {...register("title")}
                   />
+                  {errors.title && (
+                    <p className="text-xs text-destructive">
+                      {errors.title.message}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -372,14 +408,16 @@ export default function EditEstablishmentPage() {
                   <Input
                     id="shortDescription"
                     placeholder="Résumé en une ligne"
-                    value={form.shortDescription}
-                    onChange={(e) =>
-                      setForm({ ...form, shortDescription: e.target.value })
-                    }
                     maxLength={150}
+                    {...register("shortDescription")}
                   />
+                  {errors.shortDescription && (
+                    <p className="text-xs text-destructive">
+                      {errors.shortDescription.message}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
-                    {form.shortDescription.length}/150 caractères
+                    {shortDescription.length}/150 caractères
                   </p>
                 </div>
 
@@ -388,11 +426,8 @@ export default function EditEstablishmentPage() {
                   <Textarea
                     id="description"
                     placeholder="Description détaillée de l'établissement"
-                    value={form.description}
-                    onChange={(e) =>
-                      setForm({ ...form, description: e.target.value })
-                    }
                     rows={4}
+                    {...register("description")}
                   />
                 </div>
 
@@ -401,10 +436,7 @@ export default function EditEstablishmentPage() {
                   <Input
                     id="anniversary"
                     type="date"
-                    value={form.anniversary}
-                    onChange={(e) =>
-                      setForm({ ...form, anniversary: e.target.value })
-                    }
+                    {...register("anniversary")}
                   />
                   <p className="text-xs text-muted-foreground">
                     Date de création ou d’ouverture de l’établissement
@@ -544,10 +576,7 @@ export default function EditEstablishmentPage() {
                   <Input
                     id="lineAddress1"
                     placeholder="Numéro et rue"
-                    value={form.lineAddress1}
-                    onChange={(e) =>
-                      setForm({ ...form, lineAddress1: e.target.value })
-                    }
+                    {...register("lineAddress1")}
                   />
                 </div>
 
@@ -556,10 +585,7 @@ export default function EditEstablishmentPage() {
                   <Input
                     id="lineAddress2"
                     placeholder="Complément d'adresse (optionnel)"
-                    value={form.lineAddress2}
-                    onChange={(e) =>
-                      setForm({ ...form, lineAddress2: e.target.value })
-                    }
+                    {...register("lineAddress2")}
                   />
                 </div>
 
@@ -569,10 +595,7 @@ export default function EditEstablishmentPage() {
                     <Input
                       id="zipcode"
                       placeholder="Ex: 57000"
-                      value={form.zipcode}
-                      onChange={(e) =>
-                        setForm({ ...form, zipcode: e.target.value })
-                      }
+                      {...register("zipcode")}
                     />
                   </div>
 
@@ -581,8 +604,7 @@ export default function EditEstablishmentPage() {
                     <Input
                       id="city"
                       placeholder="Ex: Metz"
-                      value={form.city}
-                      onChange={(e) => setForm({ ...form, city: e.target.value })}
+                      {...register("city")}
                     />
                   </div>
 
@@ -591,10 +613,7 @@ export default function EditEstablishmentPage() {
                     <Input
                       id="country"
                       placeholder="Ex: France"
-                      value={form.country}
-                      onChange={(e) =>
-                        setForm({ ...form, country: e.target.value })
-                      }
+                      {...register("country")}
                     />
                   </div>
                 </div>
@@ -610,35 +629,43 @@ export default function EditEstablishmentPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {ALL_CONSUMPTION_TYPES.map((ct) => (
-                    <div
-                      key={ct.type}
-                      className="flex items-center justify-between rounded-lg border p-3"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{ct.icon}</span>
-                        <span className="text-sm font-medium">{ct.label}</span>
-                      </div>
-                      <Switch
-                        checked={activeConsumptionTypes.has(ct.type)}
-                        onCheckedChange={(checked) => {
-                          setActiveConsumptionTypes((prev) => {
-                            const next = new Set(prev);
-                            if (checked) {
-                              next.add(ct.type);
-                            } else {
-                              next.delete(ct.type);
-                            }
-                            return next;
-                          });
-                        }}
-                      />
+                <Controller
+                  name="consumptionTypes"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {ALL_CONSUMPTION_TYPES.map((ct) => (
+                        <div
+                          key={ct.type}
+                          className="flex items-center justify-between rounded-lg border p-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{ct.icon}</span>
+                            <span className="text-sm font-medium">{ct.label}</span>
+                          </div>
+                          <Switch
+                            checked={field.value.includes(ct.type)}
+                            onCheckedChange={(checked) => {
+                              field.onChange(
+                                checked
+                                  ? [...field.value, ct.type]
+                                  : field.value.filter((t) => t !== ct.type)
+                              );
+                            }}
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                />
               </CardContent>
             </Card>
+
+            {serverError && (
+              <div className="mt-6 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {serverError}
+              </div>
+            )}
 
             <div className="mt-6 flex justify-end gap-4">
               <Link href="/content/establishments">
@@ -646,8 +673,8 @@ export default function EditEstablishmentPage() {
                   Annuler
                 </Button>
               </Link>
-              <Button type="submit" disabled={loading}>
-                {loading && (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 )}
                 Enregistrer

@@ -8,6 +8,11 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
+import { beerUpdateSchema } from "@/lib/schemas/beer.schema";
+import {
+  establishmentUpdateSchema,
+  establishmentConsumptionTypesSchema,
+} from "@/lib/schemas/establishment.schema";
 import type {
   BeerUpdate as BeerUpdateType,
   EstablishmentUpdate as EstablishmentUpdateType,
@@ -342,6 +347,7 @@ export async function updateBeer(
   id: number,
   data: BeerUpdateType
 ): Promise<Beer> {
+  beerUpdateSchema.parse(data);
   const supabase = createClient();
   const payload = { ...data, updated_at: new Date().toISOString() };
 
@@ -459,6 +465,7 @@ export async function updateEstablishment(
   id: number,
   data: EstablishmentUpdateType
 ): Promise<Establishment> {
+  establishmentUpdateSchema.parse(data);
   const supabase = createClient();
   const payload = { ...data, updated_at: new Date().toISOString() };
 
@@ -597,6 +604,7 @@ export async function setEstablishmentConsumptionTypes(
   establishmentId: number,
   types: { consumption_type: ConsumptionType; is_active: boolean }[]
 ): Promise<void> {
+  establishmentConsumptionTypesSchema.parse(types);
   const supabase = createClient();
 
   await (supabase.from("establishment_consumption_types") as any)
