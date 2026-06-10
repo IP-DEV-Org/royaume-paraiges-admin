@@ -28,7 +28,7 @@ Next.js 16.1 (App Router) · React 19.2 · TypeScript 5.7 · Supabase 2.47 · Ta
 
 ### Validation runtime — Zod obligatoire
 
-Tout service qui mute la BDD (RPC ou table-write) valide son input avec un schéma Zod dans `src/lib/schemas/`, appelé via `schema.parse(input)` au début. Schémas existants : `manualCouponSchema`, `questSchema`/`questUpdateSchema`, `achievementBadgeSchema`/`achievementBadgeUpdateSchema`, `distributeRewardsSchema`, `seasonClosureSchema`. Les schémas servent aussi de base aux forms UI.
+Tout service qui mute la BDD (RPC ou table-write) valide son input avec un schéma Zod dans `src/lib/schemas/`, appelé via `schema.parse(input)` au début. Schémas existants : `manualCouponSchema`, `questSchema`/`questUpdateSchema`, `achievementBadgeSchema`/`achievementBadgeUpdateSchema`, `distributeRewardsSchema`, `seasonClosureSchema`, `beerSchema`/`beerUpdateSchema`, `establishmentSchema`/`establishmentUpdateSchema`. Les schémas servent aussi de base aux forms UI.
 
 ### Forms — react-hook-form + zodResolver
 
@@ -39,7 +39,7 @@ Pattern : `useForm<FormInput>({ resolver: zodResolver(schema), defaultValues })`
 - Erreur serveur : state local `serverError`, bandeau au-dessus des actions.
 - Toasts : `import { toast } from "sonner"` — **seul système** depuis juin 2026 : le `useToast`/`toaster.tsx`/`toast.tsx` shadcn a été supprimé du repo, ne pas le réintroduire.
 
-Forms migrés : `coupons/create`, `rewards/achievements/_form/AchievementBadgeForm`, `quests/_form/QuestForm`.
+Forms migrés : `coupons/create`, `rewards/achievements/_form/AchievementBadgeForm`, `quests/_form/QuestForm`, `content/beers/[id]`, `content/establishments/[id]`.
 
 ### Composants UI partagés (juin 2026)
 
@@ -70,7 +70,7 @@ Toujours utiliser ces composants plutôt que de réécrire le pattern localement
 
 **Règle** : toute mutation qui change un listing **doit** invalider `xxxKeys.all` du domaine, sinon stale jusqu'à 30s.
 
-Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026). Reste en `useEffect+useState` : le listing `/quests` (909 lignes, PR dédiée) et les pages détail `content/*/[id]`.
+Listings migrés : `rewards/achievements`, `rewards/tiers`, `coupons`, `users`, `templates`, `quests`, `content/beers`, `content/establishments`, `history`, `receipts`, `rewards/periods`, `reconciliation/health` (juin 2026), plus les pages détail `content/*/[id]` (useQuery `beerKeys.detail` / `establishmentKeys.detail`, juin 2026). Reste en `useEffect+useState` : le listing `/quests` (909 lignes, PR dédiée).
 
 ### Conversion target_value des quêtes — piège récurrent
 
@@ -224,6 +224,8 @@ Tous les services qui mutent la BDD via une RPC ou un table-write valident leur 
 | `achievementBadgeService.create` / `update` | `achievementBadgeSchema` / `achievementBadgeUpdateSchema` | slug regex, criterion_params per criterion_type, mode cron requis pour streaks |
 | `rewardService.distributeRewards` | `distributeRewardsSchema` | period_type enum, force/previewOnly booléens |
 | `seasonService.snapshot` / `awardBadges` / `reset` | `seasonClosureSchema` | year ∈ [2020, 2100], source enum |
+| `contentService.updateBeer` | `beerUpdateSchema` | title requis, IBU ∈ [0, 120] entier, ABV ∈ [0, 20], brewery_id positif |
+| `contentService.updateEstablishment` / `setEstablishmentConsumptionTypes` | `establishmentUpdateSchema` / `establishmentConsumptionTypesSchema` | title requis, short_description ≤ 150, anniversary AAAA-MM-JJ, enum consumption_type |
 
 **Règle** : si tu ajoutes un nouveau service mutateur, ajoute aussi son schéma Zod dans `src/lib/schemas/` et appelle `schema.parse(input)` au début. Les schémas peuvent ensuite servir de base pour les forms côté UI.
 
@@ -257,7 +259,7 @@ const submit = form.handleSubmit(async (values) => {
 - Erreur serveur capturée dans un state local `serverError`, affichée en bandeau au-dessus des actions
 - Toast de succès/erreur via `import { toast } from "sonner"` (pas le `useToast` shadcn)
 
-**Forms migrés à date** : `coupons/create`, `rewards/achievements/_form/AchievementBadgeForm` (shared create+edit), `quests/_form/QuestForm` (shared create+edit).
+**Forms migrés à date** : `coupons/create`, `rewards/achievements/_form/AchievementBadgeForm` (shared create+edit), `quests/_form/QuestForm` (shared create+edit), `content/beers/[id]` et `content/establishments/[id]` (édition, pattern page = queries + handoff vers composant enfant initialisé depuis les props).
 
 ### Data fetching — TanStack React Query
 
@@ -280,7 +282,7 @@ queryClient.invalidateQueries({ queryKey: questKeys.all });
 
 **Règle** : toute mutation qui change le contenu d'un listing **doit** invalider la query key `xxxKeys.all` du domaine pour que la liste se rafraîchisse au retour. Sans ça, l'utilisateur voit du stale jusqu'à 30s.
 
-**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`. Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
+**Listings migrés à date** : `rewards/achievements`, `coupons`, `users`, `templates`, `history`, `receipts`, `rewards/periods`, `reconciliation/health`, plus les pages détail `content/beers/[id]` et `content/establishments/[id]`. Le listing `quests` reste sur `useEffect+useState` (909 lignes, à migrer dans une PR dédiée).
 
 ### Conversion target_value des quêtes — piège récurrent
 
