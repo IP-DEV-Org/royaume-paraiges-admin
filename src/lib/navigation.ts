@@ -17,6 +17,7 @@ import {
   Coins,
   Award,
   Settings as SettingsIcon,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,6 +40,7 @@ export const navigationGroups: NavGroup[] = [
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Analytics", href: "/analytics", icon: BarChart3 },
+      { name: "Répartition XP", href: "/analytics/xp", icon: Zap },
       { name: "Réconciliation Cashpad", href: "/reconciliation", icon: Scale },
     ],
   },
@@ -83,6 +85,7 @@ export const navigationGroups: NavGroup[] = [
 // utilisés pour construire le fil d'Ariane.
 export const segmentLabels: Record<string, string> = {
   analytics: "Analytics",
+  xp: "Répartition XP",
   reconciliation: "Réconciliation Cashpad",
   health: "Santé",
   users: "Utilisateurs",

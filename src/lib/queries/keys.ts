@@ -164,4 +164,15 @@ export const analyticsKeys = {
     ] as const,
   timelineGlobal: (filters: { startDate: string; endDate: string }) =>
     [...analyticsKeys.all, "timelineGlobal", filters] as const,
+  xpDistribution: (filters: { startDate: string; endDate: string }) =>
+    [...analyticsKeys.all, "xpDistribution", filters] as const,
+  xpYearlySeries: (year: number) =>
+    [...analyticsKeys.all, "xpYearlySeries", year] as const,
+  xpYearlySeriesUsers: (year: number, customerIds: string[]) =>
+    [
+      ...analyticsKeys.all,
+      "xpYearlySeriesUsers",
+      year,
+      [...customerIds].sort(),
+    ] as const,
 };

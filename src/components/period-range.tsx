@@ -15,7 +15,17 @@ import { formatDate } from "@/lib/utils";
 // — ne jamais réintroduire un calcul de semaine dimanche → samedi.
 // =============================================================================
 
-export type PeriodMode = "day" | "week" | "month";
+export type PeriodMode = "day" | "week" | "month" | "year";
+
+/** Modes proposés par défaut — « year » est opt-in via la prop `modes`. */
+const DEFAULT_MODES: PeriodMode[] = ["day", "week", "month"];
+
+const MODE_LABELS: Record<PeriodMode, string> = {
+  day: "Jour",
+  week: "Semaine",
+  month: "Mois",
+  year: "Année",
+};
 
 export function todayUtcISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -61,8 +71,10 @@ export function shiftPeriod(dateISO: string, mode: PeriodMode, dir: -1 | 1): str
     d.setUTCDate(d.getUTCDate() + dir);
   } else if (mode === "week") {
     d.setUTCDate(d.getUTCDate() + dir * 7);
-  } else {
+  } else if (mode === "month") {
     d.setUTCMonth(d.getUTCMonth() + dir);
+  } else {
+    d.setUTCFullYear(d.getUTCFullYear() + dir);
   }
   return d.toISOString().slice(0, 10);
 }
@@ -72,7 +84,8 @@ export function isPeriodAtMax(dateISO: string, mode: PeriodMode): boolean {
   const today = todayUtcISO();
   if (mode === "day") return dateISO >= today;
   if (mode === "week") return dateToWeekValue(dateISO) >= dateToWeekValue(today);
-  return dateToMonthValue(dateISO) >= dateToMonthValue(today);
+  if (mode === "month") return dateToMonthValue(dateISO) >= dateToMonthValue(today);
+  return dateISO.slice(0, 4) >= today.slice(0, 4);
 }
 
 /** Bornes calendaires [startDate, endDate] (YYYY-MM-DD) de la période. */
@@ -97,13 +110,18 @@ export function getPeriodBounds(
       endDate: sunday.toISOString().slice(0, 10),
     };
   }
-  // month — 1er → dernier jour du mois civil
-  const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
-  return {
-    startDate: first.toISOString().slice(0, 10),
-    endDate: last.toISOString().slice(0, 10),
-  };
+  if (mode === "month") {
+    // 1er → dernier jour du mois civil
+    const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+    const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+    return {
+      startDate: first.toISOString().slice(0, 10),
+      endDate: last.toISOString().slice(0, 10),
+    };
+  }
+  // year — 1er janvier → 31 décembre
+  const year = d.getUTCFullYear();
+  return { startDate: `${year}-01-01`, endDate: `${year}-12-31` };
 }
 
 export function formatPeriodLabel(
@@ -112,6 +130,7 @@ export function formatPeriodLabel(
   endDate: string
 ): string {
   if (mode === "day") return formatDate(`${startDate}T00:00:00Z`);
+  if (mode === "year") return startDate.slice(0, 4);
   const fmt = (iso: string) =>
     new Date(`${iso}T00:00:00Z`).toLocaleDateString("fr-FR", {
       day: "2-digit",
@@ -137,13 +156,19 @@ function openPickerOnClick(e: React.MouseEvent<HTMLInputElement>) {
 interface PeriodModeToggleProps {
   mode: PeriodMode;
   onModeChange: (mode: PeriodMode) => void;
+  /** Modes proposés (défaut Jour / Semaine / Mois — « year » est opt-in). */
+  modes?: PeriodMode[];
 }
 
-/** Pills Jour / Semaine / Mois. */
-export function PeriodModeToggle({ mode, onModeChange }: PeriodModeToggleProps) {
+/** Pills Jour / Semaine / Mois (/ Année si opt-in via `modes`). */
+export function PeriodModeToggle({
+  mode,
+  onModeChange,
+  modes = DEFAULT_MODES,
+}: PeriodModeToggleProps) {
   return (
     <div className="flex gap-1 rounded-md border bg-muted/30 p-1">
-      {(["day", "week", "month"] as PeriodMode[]).map((m) => (
+      {modes.map((m) => (
         <button
           key={m}
           type="button"
@@ -154,7 +179,7 @@ export function PeriodModeToggle({ mode, onModeChange }: PeriodModeToggleProps) 
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          {m === "day" ? "Jour" : m === "week" ? "Semaine" : "Mois"}
+          {MODE_LABELS[m]}
         </button>
       ))}
     </div>
@@ -222,6 +247,22 @@ export function PeriodDateNav({
           className={inputClassName}
         />
       )}
+      {mode === "year" && (
+        // Pas d'input HTML5 « year » : saisie numérique bornée à l'année courante.
+        <Input
+          type="number"
+          value={date.slice(0, 4)}
+          onChange={(e) => {
+            const y = parseInt(e.target.value, 10);
+            if (y >= 2020 && y <= parseInt(todayUtcISO().slice(0, 4), 10)) {
+              onDateChange(`${y}-01-01`);
+            }
+          }}
+          min={2020}
+          max={todayUtcISO().slice(0, 4)}
+          className={inputClassName}
+        />
+      )}
 
       <Button
         type="button"
@@ -257,15 +298,23 @@ interface PeriodRangeProps {
   date: string;
   onModeChange: (mode: PeriodMode) => void;
   onDateChange: (date: string) => void;
+  /** Modes proposés (défaut Jour / Semaine / Mois — « year » est opt-in). */
+  modes?: PeriodMode[];
 }
 
 /** Layout inline complet : toggle + navigation + label de la période. */
-export function PeriodRange({ mode, date, onModeChange, onDateChange }: PeriodRangeProps) {
+export function PeriodRange({
+  mode,
+  date,
+  onModeChange,
+  onDateChange,
+  modes,
+}: PeriodRangeProps) {
   const { startDate, endDate } = getPeriodBounds(mode, date);
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-      <PeriodModeToggle mode={mode} onModeChange={onModeChange} />
+      <PeriodModeToggle mode={mode} onModeChange={onModeChange} modes={modes} />
       <PeriodDateNav mode={mode} date={date} onDateChange={onDateChange} showToday />
       <p className="px-1 text-xs text-muted-foreground sm:self-center">
         {formatPeriodLabel(mode, startDate, endDate)}
