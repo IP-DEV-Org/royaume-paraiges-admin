@@ -19,6 +19,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { navigationGroups } from "@/lib/navigation";
+import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -36,8 +37,19 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const { isFeatureEnabled } = useCurrentAdmin();
 
-  const activeHref = navigationGroups
+  // Navigation filtrée par les accès de l'admin connecté (groupes vides masqués).
+  const visibleGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.featureKey || isFeatureEnabled(item.featureKey)
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const activeHref = visibleGroups
     .flatMap((group) => group.items)
     .filter((item) =>
       item.href === "/"
@@ -80,7 +92,7 @@ export function Sidebar({
 
       {/* Navigation */}
       <nav className={cn("flex-1 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
-        {navigationGroups.map((group, groupIndex) => (
+        {visibleGroups.map((group, groupIndex) => (
           <div key={groupIndex} className={cn(groupIndex > 0 && "mt-6")}>
             {group.title && !collapsed && (
               <h3 className="mb-2 px-3 text-xs font-bold uppercase tracking-wider text-foreground">

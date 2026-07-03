@@ -14,17 +14,20 @@ import {
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { navigationGroups } from "@/lib/navigation";
+import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
+import type { FeatureKey } from "@/lib/features";
 
 // Pages secondaires accessibles via la palette mais absentes de la sidebar.
-const extraPages = [
-  { name: "Créer un coupon", href: "/coupons/create" },
-  { name: "Créer une quête", href: "/quests/create" },
-  { name: "Santé des quêtes", href: "/quests/health" },
-  { name: "Santé du matching Cashpad", href: "/reconciliation/health" },
-  { name: "Périodes de classement", href: "/rewards/periods" },
-  { name: "Paliers du leaderboard", href: "/rewards/tiers" },
-  { name: "Distribution des récompenses", href: "/rewards/distribute" },
-  { name: "Clôture de saison", href: "/rewards/season" },
+// Chaque page hérite de la fonctionnalité de sa section parente.
+const extraPages: { name: string; href: string; featureKey?: FeatureKey }[] = [
+  { name: "Créer un coupon", href: "/coupons/create", featureKey: "coupons" },
+  { name: "Créer une quête", href: "/quests/create", featureKey: "quests" },
+  { name: "Santé des quêtes", href: "/quests/health", featureKey: "quests" },
+  { name: "Santé du matching Cashpad", href: "/reconciliation/health", featureKey: "reconciliation" },
+  { name: "Périodes de classement", href: "/rewards/periods", featureKey: "rewards" },
+  { name: "Paliers du leaderboard", href: "/rewards/tiers", featureKey: "rewards" },
+  { name: "Distribution des récompenses", href: "/rewards/distribute", featureKey: "rewards" },
+  { name: "Clôture de saison", href: "/rewards/season", featureKey: "rewards" },
 ];
 
 export function useCommandPalette() {
@@ -70,6 +73,7 @@ export function CommandPalette({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const { isFeatureEnabled, isSuperAdmin } = useCurrentAdmin();
 
   const navigate = useCallback(
     (href: string) => {
@@ -79,12 +83,26 @@ export function CommandPalette({
     [onOpenChange, router]
   );
 
+  // Navigation et pages secondaires filtrées par les accès de l'admin connecté.
+  const visibleGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.featureKey || isFeatureEnabled(item.featureKey)
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const visibleExtraPages = extraPages.filter(
+    (page) => !page.featureKey || isFeatureEnabled(page.featureKey)
+  );
+
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput placeholder="Aller à une page…" />
       <CommandList>
         <CommandEmpty>Aucune page trouvée.</CommandEmpty>
-        {navigationGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <CommandGroup key={group.title} heading={group.title}>
             {group.items.map((item) => (
               <CommandItem
@@ -100,7 +118,7 @@ export function CommandPalette({
         ))}
         <CommandSeparator />
         <CommandGroup heading="Autres pages">
-          {extraPages.map((page) => (
+          {visibleExtraPages.map((page) => (
             <CommandItem
               key={page.href}
               value={page.name}
@@ -109,6 +127,14 @@ export function CommandPalette({
               {page.name}
             </CommandItem>
           ))}
+          {isSuperAdmin && (
+            <CommandItem
+              value="Gestion des accès"
+              onSelect={() => navigate("/settings/access")}
+            >
+              Gestion des accès
+            </CommandItem>
+          )}
         </CommandGroup>
       </CommandList>
     </CommandDialog>

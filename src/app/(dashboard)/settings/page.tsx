@@ -19,8 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, Percent, Wallet, Utensils } from "lucide-react";
+import { Loader2, Save, Percent, Wallet, Utensils, UserCog, ChevronRight } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
+import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
 import {
   SETTING_KEYS,
   getQuestAlertRatioPct,
@@ -105,6 +106,7 @@ function SettingsForm({
   avgTicketSample: number;
 }) {
   const queryClient = useQueryClient();
+  const { isSuperAdmin } = useCurrentAdmin();
 
   const [ratioPct, setRatioPct] = useState(String(initialRatio));
   const [prices, setPrices] = useState<
@@ -269,6 +271,31 @@ function SettingsForm({
           ))}
         </CardContent>
       </Card>
+
+      {isSuperAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserCog className="h-5 w-5" />
+              Gestion des accès
+            </CardTitle>
+            <CardDescription>
+              Activez ou désactivez l&apos;accès aux fonctionnalités de
+              l&apos;interface pour chaque administrateur. Réservé au super
+              admin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href="/settings/access"
+              className="inline-flex items-center gap-1 text-sm font-medium underline hover:text-foreground"
+            >
+              Ouvrir la gestion des accès
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       <Separator />
 

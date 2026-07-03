@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import type { CookieOptions } from "@supabase/ssr";
+import { resolveFeatureKey } from "@/lib/features";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -55,15 +56,17 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user) {
-    // Check if user is admin
-     
+    // Check if user is admin + charge ses restrictions d'accès en une seule query.
+    // Le `!profile_id` est obligatoire : admin_disabled_features a 2 FK vers
+    // profiles (profile_id et created_by), l'embed serait ambigu sinon.
     const { data: profile } = await (supabase
       .from("profiles") as any)
-      .select("role")
+      .select("role, is_super_admin, admin_disabled_features!profile_id(feature_key)")
       .eq("id", user.id)
       .single();
 
     const isAdmin = profile?.role === "admin";
+    const isSuperAdmin = isAdmin && profile?.is_super_admin === true;
 
     if (!isAdmin && !isPublicRoute) {
       // Not an admin, redirect to login with error
@@ -78,6 +81,31 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       return NextResponse.redirect(url);
+    }
+
+    if (isAdmin && !isSuperAdmin) {
+      const pathname = request.nextUrl.pathname;
+
+      // La page de gestion des accès est réservée au super admin.
+      const isAccessPage =
+        pathname === "/settings/access" ||
+        pathname.startsWith("/settings/access/");
+
+      // Blocage dur des fonctionnalités désactivées pour cet admin.
+      const disabled = new Set<string>(
+        (profile?.admin_disabled_features ?? []).map(
+          (f: { feature_key: string }) => f.feature_key
+        )
+      );
+      const featureKey = resolveFeatureKey(pathname);
+
+      if (isAccessPage || (featureKey !== null && disabled.has(featureKey))) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        url.search = "";
+        url.searchParams.set("error", "feature_disabled");
+        return NextResponse.redirect(url);
+      }
     }
   }
 
