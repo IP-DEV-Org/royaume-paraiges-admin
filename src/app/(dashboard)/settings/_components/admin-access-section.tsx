@@ -6,9 +6,10 @@
 // admin_disabled_features (blocage dur par le middleware + masquage
 // sidebar/palette côté client).
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, ShieldOff, UserCog } from "lucide-react";
+import { Loader2, ShieldOff, UserCog, UserPlus } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -18,8 +19,10 @@ import {
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
+import { AddAdminDialog } from "./add-admin-dialog";
 import {
   disableFeature,
   enableFeature,
@@ -33,6 +36,7 @@ import type { Profile } from "@/types/database";
 
 export function AdminAccessSection() {
   const { isSuperAdmin, isLoading: adminLoading } = useCurrentAdmin();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const { data: admins, isLoading: adminsLoading } = useQuery({
     queryKey: adminAccessKeys.admins(),
@@ -76,11 +80,19 @@ export function AdminAccessSection() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Activez ou désactivez l&apos;accès aux fonctionnalités de
-        l&apos;interface admin pour chaque administrateur. Une fonctionnalité
-        désactivée disparaît de la navigation et son URL est bloquée.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Activez ou désactivez l&apos;accès aux fonctionnalités de
+          l&apos;interface admin pour chaque administrateur. Une fonctionnalité
+          désactivée disparaît de la navigation et son URL est bloquée.
+        </p>
+        <Button onClick={() => setAddDialogOpen(true)}>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Ajouter un admin
+        </Button>
+      </div>
+
+      <AddAdminDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
 
       {(admins ?? []).length === 0 ? (
         <EmptyState
