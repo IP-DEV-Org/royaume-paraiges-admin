@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   useMutation,
   useQuery,
@@ -19,9 +20,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, Percent, Wallet, Utensils, UserCog, ChevronRight } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Save, Percent, Wallet, Utensils } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
+import { PageHeader } from "@/components/layout/page-header";
 import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
+import { AdminAccessSection } from "./_components/admin-access-section";
 import {
   SETTING_KEYS,
   getQuestAlertRatioPct,
@@ -56,6 +60,64 @@ function eurosToCents(value: string): number | null {
 }
 
 export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-96 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <SettingsTabs />
+    </Suspense>
+  );
+}
+
+// Onglets Général / Administrateurs (ce dernier réservé au super admin).
+// L'onglet actif est synchronisé avec ?tab=admins pour permettre le deep-link
+// (palette Cmd+K) — d'où le Suspense au-dessus (useSearchParams).
+function SettingsTabs() {
+  const { isSuperAdmin } = useCurrentAdmin();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const tab =
+    searchParams.get("tab") === "admins" && isSuperAdmin ? "admins" : "general";
+
+  const handleTabChange = (value: string) => {
+    router.replace(value === "admins" ? `${pathname}?tab=admins` : pathname, {
+      scroll: false,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Paramètres"
+        description="Réglages globaux de l'application et gestion des administrateurs."
+      />
+      <Tabs value={tab} onValueChange={handleTabChange}>
+        <TabsList>
+          <TabsTrigger value="general">Général</TabsTrigger>
+          {isSuperAdmin && (
+            <TabsTrigger value="admins">Administrateurs</TabsTrigger>
+          )}
+        </TabsList>
+        <TabsContent value="general" className="mt-6">
+          <GeneralSettingsTab />
+        </TabsContent>
+        {isSuperAdmin && (
+          <TabsContent value="admins" className="mt-6">
+            <AdminAccessSection />
+          </TabsContent>
+        )}
+      </Tabs>
+    </div>
+  );
+}
+
+function GeneralSettingsTab() {
   const { data: ratio, isLoading: ratioLoading } = useQuery({
     queryKey: adminSettingsKeys.questAlertRatio(),
     queryFn: getQuestAlertRatioPct,
@@ -106,7 +168,6 @@ function SettingsForm({
   avgTicketSample: number;
 }) {
   const queryClient = useQueryClient();
-  const { isSuperAdmin } = useCurrentAdmin();
 
   const [ratioPct, setRatioPct] = useState(String(initialRatio));
   const [prices, setPrices] = useState<
@@ -171,13 +232,9 @@ function SettingsForm({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Paramètres</h1>
-        <p className="text-muted-foreground">
-          Réglages globaux utilisés pour le calcul et la surveillance des
-          quêtes.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Réglages globaux utilisés pour le calcul et la surveillance des quêtes.
+      </p>
 
       <div className="grid gap-4 md:grid-cols-2">
         <StatCard
@@ -271,31 +328,6 @@ function SettingsForm({
           ))}
         </CardContent>
       </Card>
-
-      {isSuperAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserCog className="h-5 w-5" />
-              Gestion des accès
-            </CardTitle>
-            <CardDescription>
-              Activez ou désactivez l&apos;accès aux fonctionnalités de
-              l&apos;interface pour chaque administrateur. Réservé au super
-              admin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link
-              href="/settings/access"
-              className="inline-flex items-center gap-1 text-sm font-medium underline hover:text-foreground"
-            >
-              Ouvrir la gestion des accès
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </CardContent>
-        </Card>
-      )}
 
       <Separator />
 

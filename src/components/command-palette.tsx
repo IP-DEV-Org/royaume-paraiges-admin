@@ -129,10 +129,10 @@ export function CommandPalette({
           ))}
           {isSuperAdmin && (
             <CommandItem
-              value="Gestion des accès"
-              onSelect={() => navigate("/settings/access")}
+              value="Gestion des administrateurs"
+              onSelect={() => navigate("/settings?tab=admins")}
             >
-              Gestion des accès
+              Gestion des administrateurs
             </CommandItem>
           )}
         </CommandGroup>

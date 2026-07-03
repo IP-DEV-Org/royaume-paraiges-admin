@@ -108,7 +108,6 @@ export const segmentLabels: Record<string, string> = {
   gdpr: "RGPD",
   documentation: "Documentation",
   settings: "Paramètres",
-  access: "Gestion des accès",
   create: "Créer",
   weekly: "Hebdomadaire",
   monthly: "Mensuelle",

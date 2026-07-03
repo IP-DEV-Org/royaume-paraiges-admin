@@ -86,12 +86,9 @@ export async function updateSession(request: NextRequest) {
     if (isAdmin && !isSuperAdmin) {
       const pathname = request.nextUrl.pathname;
 
-      // La page de gestion des accès est réservée au super admin.
-      const isAccessPage =
-        pathname === "/settings/access" ||
-        pathname.startsWith("/settings/access/");
-
       // Blocage dur des fonctionnalités désactivées pour cet admin.
+      // (La gestion des accès elle-même — onglet Administrateurs de /settings —
+      // est masquée côté client et protégée en écriture par la RLS.)
       const disabled = new Set<string>(
         (profile?.admin_disabled_features ?? []).map(
           (f: { feature_key: string }) => f.feature_key
@@ -99,7 +96,7 @@ export async function updateSession(request: NextRequest) {
       );
       const featureKey = resolveFeatureKey(pathname);
 
-      if (isAccessPage || (featureKey !== null && disabled.has(featureKey))) {
+      if (featureKey !== null && disabled.has(featureKey)) {
         const url = request.nextUrl.clone();
         url.pathname = "/";
         url.search = "";

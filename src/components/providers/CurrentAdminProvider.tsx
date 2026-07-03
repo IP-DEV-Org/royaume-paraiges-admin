@@ -2,7 +2,7 @@
 
 // Contexte de l'admin connecté : profil, statut super admin et fonctionnalités
 // désactivées (migration 057). Consommé par la Sidebar, la palette Cmd+K, le
-// Header et la page /settings/access. Pendant le chargement, aucune feature
+// Header et l'onglet Administrateurs de /settings. Pendant le chargement, aucune feature
 // n'est considérée désactivée (pas de flash de masquage) — le blocage dur
 // reste porté par le middleware.
 

@@ -1,9 +1,10 @@
 "use client";
 
 // Gestion des accès par fonctionnalité (super admin uniquement, migration 057).
-// Chaque admin non-super dispose d'un interrupteur par entrée de la sidebar ;
-// désactiver = insérer une ligne dans admin_disabled_features (blocage dur
-// par le middleware + masquage sidebar/palette côté client).
+// Onglet « Administrateurs » de /settings. Chaque admin non-super dispose d'un
+// interrupteur par entrée de la sidebar ; désactiver = insérer une ligne dans
+// admin_disabled_features (blocage dur par le middleware + masquage
+// sidebar/palette côté client).
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -17,7 +18,6 @@ import {
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
 import {
@@ -31,7 +31,7 @@ import { navigationGroups } from "@/lib/navigation";
 import type { FeatureKey } from "@/lib/features";
 import type { Profile } from "@/types/database";
 
-export default function AccessSettingsPage() {
+export function AdminAccessSection() {
   const { isSuperAdmin, isLoading: adminLoading } = useCurrentAdmin();
 
   const { data: admins, isLoading: adminsLoading } = useQuery({
@@ -48,18 +48,19 @@ export default function AccessSettingsPage() {
 
   if (adminLoading || (isSuperAdmin && (adminsLoading || disabledLoading))) {
     return (
-      <div className="flex h-96 items-center justify-center">
+      <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  // Le middleware bloque déjà l'URL ; garde client par défense en profondeur.
+  // L'onglet n'est affiché qu'au super admin ; garde par défense en profondeur
+  // (deep-link ?tab=admins par un admin normal).
   if (!isSuperAdmin) {
     return (
       <EmptyState
         icon={ShieldOff}
-        title="Page réservée au super admin"
+        title="Section réservée au super admin"
         description="Seul un compte super admin peut gérer les accès des administrateurs."
       />
     );
@@ -75,10 +76,11 @@ export default function AccessSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Gestion des accès"
-        description="Activez ou désactivez l'accès aux fonctionnalités de l'interface admin pour chaque administrateur. Une fonctionnalité désactivée disparaît de la navigation et son URL est bloquée."
-      />
+      <p className="text-sm text-muted-foreground">
+        Activez ou désactivez l&apos;accès aux fonctionnalités de
+        l&apos;interface admin pour chaque administrateur. Une fonctionnalité
+        désactivée disparaît de la navigation et son URL est bloquée.
+      </p>
 
       {(admins ?? []).length === 0 ? (
         <EmptyState
@@ -119,9 +121,7 @@ function AdminAccessCard({
     },
     onSuccess: (_data, input) => {
       queryClient.invalidateQueries({ queryKey: adminAccessKeys.all });
-      toast.success(
-        input.enable ? "Accès réactivé" : "Accès désactivé"
-      );
+      toast.success(input.enable ? "Accès réactivé" : "Accès désactivé");
     },
     onError: (err) => {
       console.error(err);
