@@ -14,6 +14,70 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_disabled_features: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          feature_key: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          feature_key: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          feature_key?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_disabled_features_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_disabled_features_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_disabled_features_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "admin_disabled_features_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_disabled_features_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_disabled_features_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
       admin_settings: {
         Row: {
           description: string | null
@@ -1778,6 +1842,7 @@ export type Database = {
           id: string
           identity_photo_updated_at: string | null
           identity_photo_url: string | null
+          is_super_admin: boolean
           is_test: boolean
           last_name: string | null
           phone: string | null
@@ -1801,6 +1866,7 @@ export type Database = {
           id?: string
           identity_photo_updated_at?: string | null
           identity_photo_url?: string | null
+          is_super_admin?: boolean
           is_test?: boolean
           last_name?: string | null
           phone?: string | null
@@ -1824,6 +1890,7 @@ export type Database = {
           id?: string
           identity_photo_updated_at?: string | null
           identity_photo_url?: string | null
+          is_super_admin?: boolean
           is_test?: boolean
           last_name?: string | null
           phone?: string | null
@@ -2297,6 +2364,7 @@ export type Database = {
           employee_id: string | null
           establishment_id: number
           id: number
+          idempotency_key: string | null
         }
         Insert: {
           amount: number
@@ -2306,6 +2374,7 @@ export type Database = {
           employee_id?: string | null
           establishment_id: number
           id?: number
+          idempotency_key?: string | null
         }
         Update: {
           amount?: number
@@ -2315,6 +2384,7 @@ export type Database = {
           employee_id?: string | null
           establishment_id?: number
           id?: number
+          idempotency_key?: string | null
         }
         Relationships: [
           {
@@ -3051,6 +3121,7 @@ export type Database = {
           p_customer_id: string
           p_employee_id?: string
           p_establishment_id: number
+          p_idempotency_key?: string
           p_payment_methods: Json
         }
         Returns: Json
@@ -3125,18 +3196,23 @@ export type Database = {
         Args: {
           p_end_date: string
           p_establishment_ids?: number[]
+          p_include_cashpad?: boolean
           p_start_date: string
         }
         Returns: {
           establishment_id: number
           establishment_title: string
+          euro_cashpad_cents: number
+          euro_cashpad_other_cents: number
+          euro_royaume_cents: number
           fiscal_date: string
           is_fallback_calendar: boolean
+          pdb_cashpad_cents: number
           pdb_organic_cents: number
-          pdb_payments_cents: number
+          pdb_quest_cents: number
+          pdb_royaume_cents: number
           range_begin: string
           range_end: string
-          transactions_amount_cents: number
         }[]
       }
       get_analytics_timeline_global: {
@@ -3302,6 +3378,7 @@ export type Database = {
         }[]
       }
       get_user_xp_stats: { Args: { p_customer_id: string }; Returns: Json }
+      is_super_admin: { Args: { p_profile_id?: string }; Returns: boolean }
       mark_badges_seen: {
         Args: { p_customer_id: string; p_user_badge_ids: number[] }
         Returns: undefined

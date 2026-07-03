@@ -177,3 +177,10 @@ export const analyticsKeys = {
       [...customerIds].sort(),
     ] as const,
 };
+
+export const adminAccessKeys = {
+  all: ["adminAccess"] as const,
+  current: () => [...adminAccessKeys.all, "current"] as const,
+  admins: () => [...adminAccessKeys.all, "admins"] as const,
+  disabledFeatures: () => [...adminAccessKeys.all, "disabledFeatures"] as const,
+};

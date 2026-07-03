@@ -74,6 +74,10 @@ export type AdminSetting = Database["public"]["Tables"]["admin_settings"]["Row"]
 export type AdminSettingInsert = Database["public"]["Tables"]["admin_settings"]["Insert"];
 export type AdminSettingUpdate = Database["public"]["Tables"]["admin_settings"]["Update"];
 
+// Accès par fonctionnalité entre admins (migration 057)
+export type AdminDisabledFeature = Database["public"]["Tables"]["admin_disabled_features"]["Row"];
+export type AdminDisabledFeatureInsert = Database["public"]["Tables"]["admin_disabled_features"]["Insert"];
+
 // Ranks (groupes de niveaux éditables depuis /content/storytelling)
 export type Rank = Database["public"]["Tables"]["ranks"]["Row"];
 export type RankInsert = Database["public"]["Tables"]["ranks"]["Insert"];

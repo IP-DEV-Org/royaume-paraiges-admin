@@ -1,3 +1,4 @@
+import type { FeatureKey } from "@/lib/features";
 import {
   LayoutDashboard,
   Ticket,
@@ -17,6 +18,7 @@ import {
   Coins,
   Award,
   Settings as SettingsIcon,
+  UserCog,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +27,10 @@ export interface NavItem {
   name: string;
   href: string;
   icon: LucideIcon;
+  /** Fonctionnalité désactivable par le super admin ; absent = toujours accessible (Dashboard). */
+  featureKey?: FeatureKey;
+  /** Entrée visible et accessible uniquement par un super admin. */
+  superAdminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -39,44 +45,45 @@ export const navigationGroups: NavGroup[] = [
     title: "Vue d'ensemble",
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
-      { name: "Analytics", href: "/analytics", icon: BarChart3 },
-      { name: "Répartition XP", href: "/analytics/xp", icon: Zap },
-      { name: "Réconciliation Cashpad", href: "/reconciliation", icon: Scale },
+      { name: "Analytics", href: "/analytics", icon: BarChart3, featureKey: "analytics" },
+      { name: "Répartition XP", href: "/analytics/xp", icon: Zap, featureKey: "analytics-xp" },
+      { name: "Réconciliation Cashpad", href: "/reconciliation", icon: Scale, featureKey: "reconciliation" },
     ],
   },
   {
     title: "Activité",
     items: [
-      { name: "Utilisateurs", href: "/users", icon: Users },
-      { name: "Tickets de caisse", href: "/receipts", icon: Receipt },
-      { name: "Coupons", href: "/coupons", icon: Ticket },
-      { name: "Bonus cashback", href: "/rewards/cashback-gains", icon: Coins },
-      { name: "Historique de distribution", href: "/history", icon: History },
+      { name: "Utilisateurs", href: "/users", icon: Users, featureKey: "users" },
+      { name: "Tickets de caisse", href: "/receipts", icon: Receipt, featureKey: "receipts" },
+      { name: "Coupons", href: "/coupons", icon: Ticket, featureKey: "coupons" },
+      { name: "Bonus cashback", href: "/rewards/cashback-gains", icon: Coins, featureKey: "cashback-gains" },
+      { name: "Historique de distribution", href: "/history", icon: History, featureKey: "history" },
     ],
   },
   {
     title: "Gamification",
     items: [
-      { name: "Quêtes", href: "/quests", icon: Target },
-      { name: "Paliers & saison", href: "/rewards", icon: Trophy },
-      { name: "Badges", href: "/rewards/achievements", icon: Award },
-      { name: "Niveaux & lore", href: "/content/storytelling", icon: BookOpen },
-      { name: "Modèles de coupons", href: "/templates", icon: FileText },
+      { name: "Quêtes", href: "/quests", icon: Target, featureKey: "quests" },
+      { name: "Paliers & saison", href: "/rewards", icon: Trophy, featureKey: "rewards" },
+      { name: "Badges", href: "/rewards/achievements", icon: Award, featureKey: "achievements" },
+      { name: "Niveaux & lore", href: "/content/storytelling", icon: BookOpen, featureKey: "storytelling" },
+      { name: "Modèles de coupons", href: "/templates", icon: FileText, featureKey: "templates" },
     ],
   },
   {
     title: "Contenu",
     items: [
-      { name: "Bières", href: "/content/beers", icon: Beer },
-      { name: "Établissements", href: "/content/establishments", icon: Building2 },
+      { name: "Bières", href: "/content/beers", icon: Beer, featureKey: "beers" },
+      { name: "Établissements", href: "/content/establishments", icon: Building2, featureKey: "establishments" },
     ],
   },
   {
     title: "Système",
     items: [
-      { name: "RGPD", href: "/gdpr", icon: Shield },
-      { name: "Documentation", href: "/documentation", icon: BookText },
-      { name: "Paramètres", href: "/settings", icon: SettingsIcon },
+      { name: "RGPD", href: "/gdpr", icon: Shield, featureKey: "gdpr" },
+      { name: "Documentation", href: "/documentation", icon: BookText, featureKey: "documentation" },
+      { name: "Paramètres", href: "/settings", icon: SettingsIcon, featureKey: "settings" },
+      { name: "Gestion des admins", href: "/settings?tab=admins", icon: UserCog, superAdminOnly: true },
     ],
   },
 ];

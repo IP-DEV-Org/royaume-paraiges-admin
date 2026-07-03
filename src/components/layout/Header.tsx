@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import type { Profile } from "@/types/database";
+import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
 import { User, Menu, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,31 +25,8 @@ interface HeaderProps {
 }
 
 export function Header({ mobile = false, onMenuClick }: HeaderProps) {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const supabase = createClient();
+  const { profile, isSuperAdmin } = useCurrentAdmin();
   const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-
-        if (data) {
-          setProfile(data);
-        }
-      }
-    };
-
-    fetchProfile();
-  }, [supabase]);
 
   if (mobile) {
     return (
@@ -93,6 +68,16 @@ export function Header({ mobile = false, onMenuClick }: HeaderProps) {
             {profile?.first_name || profile?.email || "Admin"}
           </span>
           {(() => {
+            if (isSuperAdmin) {
+              return (
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-violet-100 text-violet-700 border-violet-200"
+                >
+                  Super admin
+                </Badge>
+              );
+            }
             const config = profile?.role ? roleConfig[profile.role] : undefined;
             if (!config) return null;
             return (
