@@ -1156,3 +1156,256 @@ export async function getAnalyticsTimelineGlobal(
   if (error) throw error;
   return (data || []) as TimelineGlobalRow[];
 }
+
+// ============================================================================
+// Répartition des gains d'XP par utilisateur et par jour (/analytics/xp)
+// ============================================================================
+
+export interface XpDistributionRow {
+  customer_id: string;
+  /** username, sinon prénom + nom, sinon "Inconnu". */
+  pseudo: string;
+  total_xp: number;
+  /** Jour calendaire Europe/Paris (YYYY-MM-DD) → XP gagné ce jour-là. */
+  xp_by_day: Record<string, number>;
+}
+
+/**
+ * Agrège les gains d'XP par utilisateur (hors comptes test) et par jour
+ * calendaire Europe/Paris sur [startDate, endDate] (YYYY-MM-DD inclus).
+ * Fetch paginé (limite Supabase 1000 lignes / requête), agrégation client.
+ */
+export async function getXpDistribution(
+  startDate: string,
+  endDate: string
+): Promise<XpDistributionRow[]> {
+  const supabase = createClient();
+  const testIds = await getTestUserIds();
+
+  // Bornes UTC élargies d'un jour de chaque côté : le jour Paris déborde sur
+  // le jour UTC voisin (UTC+1/+2). Le filtrage exact se fait après bucketing.
+  const widen = (iso: string, days: number) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString();
+  };
+
+  type RawXpGain = {
+    customer_id: string;
+    xp: number | null;
+    created_at: string;
+    profiles: {
+      username: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    } | null;
+  };
+
+  const PAGE = 1000;
+  const raw: RawXpGain[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let query = supabase
+      .from("gains")
+      .select(
+        "customer_id, xp, created_at, profiles!gains_customer_id_fkey(username, first_name, last_name)"
+      )
+      .gt("xp", 0)
+      .gte("created_at", widen(startDate, -1))
+      .lt("created_at", widen(endDate, 2))
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (testIds.length > 0)
+      query = query.not("customer_id", "in", `(${testIds.join(",")})`);
+
+    const { data, error } = await query.range(from, from + PAGE - 1);
+    if (error) throw error;
+    raw.push(...((data || []) as unknown as RawXpGain[]));
+    if (!data || data.length < PAGE) break;
+  }
+
+  const toParisDay = (createdAt: string) =>
+    new Date(createdAt).toLocaleDateString("en-CA", {
+      timeZone: "Europe/Paris",
+    });
+
+  const byUser = new Map<string, XpDistributionRow>();
+  for (const g of raw) {
+    const day = toParisDay(g.created_at);
+    if (day < startDate || day > endDate) continue;
+    const xp = g.xp || 0;
+    if (xp <= 0) continue;
+
+    let row = byUser.get(g.customer_id);
+    if (!row) {
+      const name = g.profiles
+        ? `${g.profiles.first_name || ""} ${g.profiles.last_name || ""}`.trim()
+        : "";
+      row = {
+        customer_id: g.customer_id,
+        pseudo: g.profiles?.username || name || "Inconnu",
+        total_xp: 0,
+        xp_by_day: {},
+      };
+      byUser.set(g.customer_id, row);
+    }
+    row.total_xp += xp;
+    row.xp_by_day[day] = (row.xp_by_day[day] || 0) + xp;
+  }
+
+  return Array.from(byUser.values()).sort((a, b) => b.total_xp - a.total_xp);
+}
+
+export interface XpWeeklyTotal {
+  /** Lundi (YYYY-MM-DD) de la semaine ISO — jours rattachés en Europe/Paris. */
+  week_start: string;
+  xp: number;
+}
+
+/**
+ * Totaux d'XP gagnés par semaine ISO (lundi → dimanche, jours Europe/Paris)
+ * sur [startDate, endDate], hors comptes test. Sert au graphique de projection
+ * annuelle de /analytics/xp. Fetch paginé léger (xp + created_at uniquement).
+ */
+export async function getXpWeeklyTotals(
+  startDate: string,
+  endDate: string
+): Promise<XpWeeklyTotal[]> {
+  const supabase = createClient();
+  const testIds = await getTestUserIds();
+
+  const widen = (iso: string, days: number) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString();
+  };
+
+  type RawGain = { xp: number | null; created_at: string };
+
+  const PAGE = 1000;
+  const raw: RawGain[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let query = supabase
+      .from("gains")
+      .select("xp, created_at")
+      .gt("xp", 0)
+      .gte("created_at", widen(startDate, -1))
+      .lt("created_at", widen(endDate, 2))
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (testIds.length > 0)
+      query = query.not("customer_id", "in", `(${testIds.join(",")})`);
+
+    const { data, error } = await query.range(from, from + PAGE - 1);
+    if (error) throw error;
+    raw.push(...((data || []) as RawGain[]));
+    if (!data || data.length < PAGE) break;
+  }
+
+  const toParisDay = (createdAt: string) =>
+    new Date(createdAt).toLocaleDateString("en-CA", {
+      timeZone: "Europe/Paris",
+    });
+
+  // Lundi de la semaine ISO contenant le jour donné.
+  const mondayOf = (dayISO: string) => {
+    const d = new Date(`${dayISO}T00:00:00Z`);
+    const dow = d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+    return d.toISOString().slice(0, 10);
+  };
+
+  const byWeek = new Map<string, number>();
+  for (const g of raw) {
+    const day = toParisDay(g.created_at);
+    if (day < startDate || day > endDate) continue;
+    const xp = g.xp || 0;
+    if (xp <= 0) continue;
+    const week = mondayOf(day);
+    byWeek.set(week, (byWeek.get(week) || 0) + xp);
+  }
+
+  return Array.from(byWeek.entries())
+    .map(([week_start, xp]) => ({ week_start, xp }))
+    .sort((a, b) => a.week_start.localeCompare(b.week_start));
+}
+
+export interface XpUserWeeklySeries {
+  customer_id: string;
+  weekly: XpWeeklyTotal[];
+}
+
+/**
+ * Totaux d'XP par semaine ISO pour une sélection d'utilisateurs — mêmes règles
+ * de bucketing que getXpWeeklyTotals. Sert aux courbes par utilisateur du
+ * graphique de projection de /analytics/xp.
+ */
+export async function getXpWeeklyTotalsForUsers(
+  startDate: string,
+  endDate: string,
+  customerIds: string[]
+): Promise<XpUserWeeklySeries[]> {
+  if (customerIds.length === 0) return [];
+  const supabase = createClient();
+
+  const widen = (iso: string, days: number) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString();
+  };
+
+  type RawGain = { customer_id: string; xp: number | null; created_at: string };
+
+  const PAGE = 1000;
+  const raw: RawGain[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("gains")
+      .select("customer_id, xp, created_at")
+      .gt("xp", 0)
+      .in("customer_id", customerIds)
+      .gte("created_at", widen(startDate, -1))
+      .lt("created_at", widen(endDate, 2))
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    raw.push(...((data || []) as RawGain[]));
+    if (!data || data.length < PAGE) break;
+  }
+
+  const toParisDay = (createdAt: string) =>
+    new Date(createdAt).toLocaleDateString("en-CA", {
+      timeZone: "Europe/Paris",
+    });
+
+  const mondayOf = (dayISO: string) => {
+    const d = new Date(`${dayISO}T00:00:00Z`);
+    const dow = d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+    return d.toISOString().slice(0, 10);
+  };
+
+  const byUser = new Map<string, Map<string, number>>();
+  for (const g of raw) {
+    const day = toParisDay(g.created_at);
+    if (day < startDate || day > endDate) continue;
+    const xp = g.xp || 0;
+    if (xp <= 0) continue;
+    const week = mondayOf(day);
+    let weeks = byUser.get(g.customer_id);
+    if (!weeks) {
+      weeks = new Map();
+      byUser.set(g.customer_id, weeks);
+    }
+    weeks.set(week, (weeks.get(week) || 0) + xp);
+  }
+
+  return customerIds.map((id) => ({
+    customer_id: id,
+    weekly: Array.from(byUser.get(id)?.entries() ?? [])
+      .map(([week_start, xp]) => ({ week_start, xp }))
+      .sort((a, b) => a.week_start.localeCompare(b.week_start)),
+  }));
+}

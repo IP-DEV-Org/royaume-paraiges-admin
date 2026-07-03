@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { analyticsKeys } from "@/lib/queries/keys";
 import {
@@ -24,16 +25,46 @@ import {
   type PeriodMode,
 } from "@/components/period-range";
 import {
+  buildTimelineCsv,
   TimelineTable,
   type TimelineCellMetric,
 } from "@/components/analytics/timeline-table";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 /** Jour calendaire suivant (YYYY-MM-DD) — borne de fin exclusive pour le drilldown. */
 function nextDay(dateISO: string): string {
   const d = new Date(`${dateISO}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
+}
+
+function downloadCsv(content: string, filename: string) {
+  const BOM = "﻿";
+  const blob = new Blob([BOM + content], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function formatDateFr(fiscalDate: string): string {
@@ -161,6 +192,58 @@ export default function AnalyticsPage() {
 
   const isLoading = timelineQuery.isLoading;
 
+  // Export CSV des données affichées : mêmes filtres (période, établissements,
+  // comparaison Cashpad) et même contenu que le tableau, colonne Total incluse.
+  const handleExportCsv = () => {
+    downloadCsv(
+      buildTimelineCsv(timelineRows, columns, showCashpad),
+      `analytics_${startDate}_${endDate}.csv`
+    );
+    toast.success("Export CSV téléchargé");
+  };
+
+  // Export d'une année complète : fetch dédié (hors query affichée), mêmes
+  // filtres établissements + comparaison Cashpad que l'écran.
+  const currentYear = new Date().getFullYear();
+  const exportableYears = Array.from(
+    { length: currentYear - 2025 + 1 },
+    (_, i) => String(currentYear - i)
+  );
+  const [exportYearOpen, setExportYearOpen] = useState(false);
+  const [exportYear, setExportYear] = useState(String(currentYear));
+  const [exportingYear, setExportingYear] = useState(false);
+
+  const handleExportYear = async () => {
+    setExportingYear(true);
+    try {
+      const rows = await getAnalyticsTimeline(
+        `${exportYear}-01-01`,
+        `${exportYear}-12-31`,
+        selectedEstablishments,
+        showCashpad
+      );
+      if (rows.length === 0) {
+        toast.info(`Aucune donnée sur l'année ${exportYear}`);
+        return;
+      }
+      const yearColumns = Array.from(
+        new Set(rows.map((r) => r.fiscal_date))
+      ).sort();
+      downloadCsv(
+        buildTimelineCsv(rows, yearColumns, showCashpad),
+        `analytics_${exportYear}.csv`
+      );
+      toast.success(`Export ${exportYear} téléchargé`);
+      setExportYearOpen(false);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Erreur lors de l'export de l'année"
+      );
+    } finally {
+      setExportingYear(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -200,7 +283,24 @@ export default function AnalyticsPage() {
           )}
         </label>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap items-end gap-3">
+          <Button
+            variant="outline"
+            onClick={handleExportCsv}
+            disabled={isLoading || timelineRows.length === 0}
+            title="Exporte en CSV les données affichées (période, établissements et comparaison Cashpad en cours)"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Exporter CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setExportYearOpen(true)}
+            title="Exporte en CSV une année complète (établissements et comparaison Cashpad en cours)"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Exporter année
+          </Button>
           <PeriodRange
             mode={periodMode}
             date={date}
@@ -229,6 +329,54 @@ export default function AnalyticsPage() {
         title={drilldownTitle}
         filters={drilldownFilters}
       />
+
+      {/* Export d'une année complète */}
+      <Dialog
+        open={exportYearOpen}
+        onOpenChange={(open) => {
+          if (!exportingYear) setExportYearOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Exporter une année</DialogTitle>
+            <DialogDescription>
+              Exporte en CSV toutes les journées fiscales de l&apos;année
+              sélectionnée, avec les filtres établissements et la comparaison
+              Cashpad en cours.
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={exportYear} onValueChange={setExportYear}>
+            <SelectTrigger aria-label="Année à exporter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {exportableYears.map((y) => (
+                <SelectItem key={y} value={y}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setExportYearOpen(false)}
+              disabled={exportingYear}
+            >
+              Annuler
+            </Button>
+            <Button onClick={handleExportYear} disabled={exportingYear}>
+              {exportingYear ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Exporter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

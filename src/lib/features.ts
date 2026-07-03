@@ -8,6 +8,7 @@
 
 export const FEATURE_KEYS = [
   "analytics",
+  "analytics-xp",
   "reconciliation",
   "users",
   "receipts",
@@ -32,6 +33,7 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
 // (ex. /quests/create → quests, /rewards/tiers → rewards).
 export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   analytics: "/analytics",
+  "analytics-xp": "/analytics/xp",
   reconciliation: "/reconciliation",
   users: "/users",
   receipts: "/receipts",
