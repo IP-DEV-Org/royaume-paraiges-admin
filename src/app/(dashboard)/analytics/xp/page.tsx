@@ -2,7 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Download, Loader2, Zap } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  Download,
+  Loader2,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { analyticsKeys } from "@/lib/queries/keys";
@@ -129,6 +136,28 @@ const FIRST_COL_W = 180;
 const TOTAL_COL_W = 100;
 const COL_W = 92;
 
+// ── Tri client (même cycle que <DataTable> : asc → desc → aucun) ─────────────
+
+/** Clé de tri : "pseudo", "total" ou une colonne jour/mois (YYYY-MM-DD / YYYY-MM). */
+type SortState = { key: string; direction: "asc" | "desc" } | null;
+
+function SortChevron({
+  sorted,
+  direction,
+}: {
+  sorted: boolean;
+  direction?: "asc" | "desc";
+}) {
+  if (!sorted) {
+    return <ChevronsUpDown className="h-3.5 w-3.5 opacity-40" aria-hidden="true" />;
+  }
+  return direction === "asc" ? (
+    <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+  ) : (
+    <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+  );
+}
+
 /** Utilisateur coché pour le graphique — le slot couleur suit l'utilisateur. */
 interface SelectedUser {
   id: string;
@@ -177,6 +206,38 @@ export default function XpDistributionPage() {
     });
   }, [rows, periodMode]);
   const isLoading = distributionQuery.isLoading;
+
+  // Tri : par défaut, ordre du service (total XP décroissant).
+  const [sort, setSort] = useState<SortState>(null);
+
+  const toggleSort = (key: string) => {
+    setSort((prev) => {
+      if (prev?.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!sort) return displayRows;
+    const dir = sort.direction === "asc" ? 1 : -1;
+    if (sort.key === "pseudo") {
+      return [...displayRows].sort(
+        (a, b) =>
+          dir * a.pseudo.localeCompare(b.pseudo, "fr", { sensitivity: "base" })
+      );
+    }
+    const value = (r: DisplayRow) =>
+      sort.key === "total" ? r.total_xp : (r.values[sort.key] ?? 0);
+    return [...displayRows].sort((a, b) => dir * (value(a) - value(b)));
+  }, [displayRows, sort]);
+
+  const ariaSort = (key: string): "ascending" | "descending" | "none" =>
+    sort?.key === key
+      ? sort.direction === "asc"
+        ? "ascending"
+        : "descending"
+      : "none";
 
   // Série hebdo de l'année en cours pour le graphique de projection —
   // indépendante de la période affichée dans le tableau.
@@ -258,7 +319,7 @@ export default function XpDistributionPage() {
       : userSeriesQuery.isLoading;
 
   const handleExportCsv = () => {
-    downloadCsv(buildXpCsv(displayRows, columns), `xp_${startDate}_${endDate}.csv`);
+    downloadCsv(buildXpCsv(sortedRows, columns), `xp_${startDate}_${endDate}.csv`);
     toast.success("Export CSV téléchargé");
   };
 
@@ -377,16 +438,53 @@ export default function XpDistributionPage() {
                 <th
                   className="sticky z-10 bg-background px-3 py-2 text-left font-medium"
                   style={{ left: CHECK_COL_W }}
+                  aria-sort={ariaSort("pseudo")}
                 >
-                  Pseudo
+                  <button
+                    type="button"
+                    onClick={() => toggleSort("pseudo")}
+                    className="-ml-1 flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground"
+                  >
+                    Pseudo
+                    <SortChevron
+                      sorted={sort?.key === "pseudo"}
+                      direction={sort?.direction}
+                    />
+                  </button>
                 </th>
-                <th className="px-3 py-2 text-right font-medium">Total XP</th>
+                <th
+                  className="px-3 py-2 text-right font-medium"
+                  aria-sort={ariaSort("total")}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleSort("total")}
+                    className="ml-auto flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground"
+                  >
+                    Total XP
+                    <SortChevron
+                      sorted={sort?.key === "total"}
+                      direction={sort?.direction}
+                    />
+                  </button>
+                </th>
                 {columns.map((c) => (
                   <th
                     key={c}
                     className="border-l border-border/30 px-3 py-2 text-right font-medium text-muted-foreground"
+                    aria-sort={ariaSort(c)}
                   >
-                    {formatColHeader(c)}
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(c)}
+                      className="ml-auto flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground"
+                    >
+                      {formatColHeader(c)}
+                      <SortChevron
+                        sorted={sort?.key === c}
+                        direction={sort?.direction}
+                      />
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -423,7 +521,7 @@ export default function XpDistributionPage() {
               )}
 
               {!isLoading &&
-                displayRows.map((r) => {
+                sortedRows.map((r) => {
                   const selected = selectedUsers.find(
                     (u) => u.id === r.customer_id
                   );

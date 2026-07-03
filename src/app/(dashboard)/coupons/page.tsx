@@ -172,6 +172,8 @@ export default function CouponsPage() {
     {
       key: "source",
       header: "Source",
+      sortable: true,
+      sortValue: (item) => getSourceLabel(item.distribution_type),
       cell: (item) => (
         <>
           <span className="text-sm">{getSourceLabel(item.distribution_type)}</span>
@@ -184,6 +186,9 @@ export default function CouponsPage() {
     {
       key: "status",
       header: "Statut",
+      sortable: true,
+      sortValue: (item) =>
+        item.used ? "Utilisé" : isExpired(item.expires_at) ? "Expiré" : "Actif",
       cell: (item) =>
         item.used ? (
           <StatusBadge status="used" />

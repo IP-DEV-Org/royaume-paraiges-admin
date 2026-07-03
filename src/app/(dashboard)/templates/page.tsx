@@ -117,6 +117,9 @@ export default function TemplatesPage() {
     {
       key: "type",
       header: "Type",
+      sortable: true,
+      sortValue: (template) =>
+        template.amount ? "Bonus Cashback" : template.percentage ? "Coupon" : null,
       cell: (template) =>
         template.amount ? (
           <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
@@ -157,6 +160,8 @@ export default function TemplatesPage() {
     {
       key: "active",
       header: "Actif",
+      sortable: true,
+      sortValue: (template) => (template.is_active ? 1 : 0),
       cell: (template) => (
         <div onClick={(e) => e.stopPropagation()}>
           <Switch

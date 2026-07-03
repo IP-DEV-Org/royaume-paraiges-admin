@@ -438,6 +438,15 @@ export default function ReceiptsPage() {
     {
       key: "payment",
       header: "Paiement",
+      sortable: true,
+      // Tri par méthode dominante (celle de la ligne au montant le plus élevé).
+      sortValue: (receipt) => {
+        if (!receipt.receipt_lines || receipt.receipt_lines.length === 0) return null;
+        const dominant = receipt.receipt_lines.reduce((max, line) =>
+          line.amount > max.amount ? line : max
+        );
+        return getPaymentMethodConfig(dominant.payment_method).label;
+      },
       cell: (receipt) => (
         <div className="flex flex-wrap gap-1">
           {receipt.receipt_lines && receipt.receipt_lines.length > 0 ? (
@@ -465,6 +474,16 @@ export default function ReceiptsPage() {
     {
       key: "consumptions",
       header: "Consommations",
+      sortable: true,
+      // Tri par quantité totale de consommations.
+      sortValue: (receipt) =>
+        receipt.receipt_consumption_items &&
+        receipt.receipt_consumption_items.length > 0
+          ? receipt.receipt_consumption_items.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            )
+          : null,
       cell: (receipt) => (
         <div className="flex flex-wrap gap-1">
           {receipt.receipt_consumption_items &&

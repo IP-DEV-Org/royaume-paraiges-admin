@@ -73,6 +73,13 @@ export default function HistoryPage() {
     {
       key: "type",
       header: "Type",
+      sortable: true,
+      sortValue: (log) =>
+        log.distribution_type === "manual"
+          ? "Manuel"
+          : log.distribution_type?.startsWith("leaderboard")
+            ? "Leaderboard"
+            : log.distribution_type,
       cell: (log) => (
         <Badge variant="outline">
           {log.distribution_type === "manual" && "Manuel"}
@@ -126,11 +133,15 @@ export default function HistoryPage() {
     {
       key: "tier",
       header: "Palier",
+      sortable: true,
+      sortValue: (log) => log.reward_tiers?.name,
       cell: (log) => log.reward_tiers?.name || "-",
     },
     {
       key: "template",
       header: "Template",
+      sortable: true,
+      sortValue: (log) => log.coupon_templates?.name,
       cell: (log) => log.coupon_templates?.name || "-",
     },
     {

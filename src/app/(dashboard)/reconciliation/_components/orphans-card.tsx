@@ -10,14 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { ReconciliationRow } from "@/lib/services/reconciliationService";
 import { DateTimeCell, formatEuro, getCustomerLabel, SkeletonRows } from "./shared";
@@ -27,6 +20,60 @@ interface OrphansCardProps {
   loading: boolean;
   onSelect: (row: ReconciliationRow) => void;
 }
+
+const columns: DataTableColumn<ReconciliationRow>[] = [
+  {
+    key: "id",
+    header: "ID",
+    sortable: true,
+    sortValue: (r) => r.receipt.id,
+    cellClassName: "font-mono text-xs",
+    cell: (r) => <>#{r.receipt.id}</>,
+  },
+  {
+    key: "created_at",
+    header: "Horodatage",
+    sortable: true,
+    sortValue: (r) => r.receipt.created_at,
+    cellClassName: "whitespace-nowrap",
+    cell: (r) => <DateTimeCell iso={r.receipt.created_at} />,
+  },
+  {
+    key: "amount",
+    header: "Montant",
+    sortable: true,
+    sortValue: (r) => r.receipt.amount,
+    cell: (r) => formatEuro(r.receipt.amount),
+  },
+  {
+    key: "establishment",
+    header: "Établissement",
+    sortable: true,
+    sortValue: (r) => r.receipt.establishment?.title,
+    cellClassName: "text-sm",
+    cell: (r) => r.receipt.establishment?.title ?? "—",
+  },
+  {
+    key: "customer",
+    header: "Client",
+    sortable: true,
+    sortValue: (r) => getCustomerLabel(r.receipt.customer),
+    cellClassName: "text-sm",
+    cell: (r) => getCustomerLabel(r.receipt.customer),
+  },
+  {
+    key: "signal",
+    header: "Signal",
+    sortable: true,
+    sortValue: (r) => (r.cancelled_match_id ? 1 : 0),
+    cell: (r) =>
+      r.cancelled_match_id ? (
+        <Badge className="bg-rose-500/15 text-rose-700 hover:bg-rose-500/20 dark:text-rose-400">
+          Cashpad annulé
+        </Badge>
+      ) : null,
+  },
+];
 
 /** Receipts Royaume sans ticket Cashpad correspondant — anomalies à investiguer. */
 export function OrphansCard({ rows, loading, onSelect }: OrphansCardProps) {
@@ -54,46 +101,13 @@ export function OrphansCard({ rows, loading, onSelect }: OrphansCardProps) {
             />
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Horodatage</TableHead>
-                <TableHead>Montant</TableHead>
-                <TableHead>Établissement</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Signal</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((r) => (
-                <TableRow
-                  key={r.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => onSelect(r)}
-                >
-                  <TableCell className="font-mono text-xs">#{r.receipt.id}</TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    <DateTimeCell iso={r.receipt.created_at} />
-                  </TableCell>
-                  <TableCell>{formatEuro(r.receipt.amount)}</TableCell>
-                  <TableCell className="text-sm">
-                    {r.receipt.establishment?.title ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {getCustomerLabel(r.receipt.customer)}
-                  </TableCell>
-                  <TableCell>
-                    {r.cancelled_match_id && (
-                      <Badge className="bg-rose-500/15 text-rose-700 hover:bg-rose-500/20 dark:text-rose-400">
-                        Cashpad annulé
-                      </Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <DataTable
+            columns={columns}
+            data={rows}
+            rowKey={(r) => r.id}
+            onRowClick={onSelect}
+            rowClassName="hover:bg-muted/50"
+          />
         )}
       </CardContent>
     </Card>
