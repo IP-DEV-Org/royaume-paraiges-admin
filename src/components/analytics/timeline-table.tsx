@@ -21,6 +21,7 @@ export type TimelineCellMetric = "euro" | "pdb_payment" | "organic";
 
 // Largeurs de colonnes FIXES (px) → l'entête et le corps s'alignent sans mesure.
 const FIRST_COL_W = 340;
+const TOTAL_COL_W = 140;
 const COL_W = 200;
 
 type CurrencyField =
@@ -163,6 +164,111 @@ function formatDiff(cents: number): string {
 /** Métrique enrichie d'un séparateur de bloc calculé selon les lignes visibles. */
 type VisibleMetric = MetricConfig & { separatorBefore: boolean };
 
+/** Groupement par établissement (ordre alphabétique stable depuis la RPC). */
+function groupByEstablishment(rows: TimelineRow[]) {
+  const groups = new Map<
+    number,
+    { title: string; byDate: Map<string, TimelineRow> }
+  >();
+  for (const r of rows) {
+    let g = groups.get(r.establishment_id);
+    if (!g) {
+      g = { title: r.establishment_title, byDate: new Map() };
+      groups.set(r.establishment_id, g);
+    }
+    g.byDate.set(r.fiscal_date, r);
+  }
+  return groups;
+}
+
+/**
+ * Total de la ligne (somme sur les journées affichées), en centimes.
+ * `null` si aucune journée n'a de donnée (→ « — »). Pour une ligne de
+ * différence, seules les journées avec donnée Cashpad entrent dans la somme
+ * (cohérent avec les cellules, qui affichent « — » sans donnée Cashpad).
+ */
+function computeRowTotal(
+  byDate: Map<string, TimelineRow>,
+  columns: string[],
+  m: MetricConfig
+): number | null {
+  let hasValue = false;
+  let sum = 0;
+  for (const c of columns) {
+    const row = byDate.get(c);
+    if (!row) continue;
+    if (m.kind === "diff" && m.diff) {
+      const cashpad = row[m.diff.cashpad];
+      if (cashpad == null) continue;
+      hasValue = true;
+      sum += cashpad - (row[m.diff.royaume] ?? 0);
+    } else if (m.field) {
+      const v = row[m.field];
+      if (v == null) continue;
+      hasValue = true;
+      sum += v;
+    }
+  }
+  return hasValue ? sum : null;
+}
+
+// =============================================================================
+// Export CSV — mêmes lignes/colonnes que le tableau affiché (filtres compris).
+// Séparateur « ; » + décimales à virgule (Excel fr), montants en euros sans « € ».
+// =============================================================================
+
+function csvAmount(cents: number | null): string {
+  if (cents == null) return "";
+  return (cents / 100).toFixed(2).replace(".", ",");
+}
+
+function escapeCsvField(value: string): string {
+  if (/[";\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+export function buildTimelineCsv(
+  rows: TimelineRow[],
+  columns: string[],
+  showCashpad: boolean
+): string {
+  const metrics = METRICS.filter((m) => showCashpad || !m.cashpad);
+  const groups = groupByEstablishment(rows);
+
+  const lines: string[] = [
+    ["Établissement", "Métrique", "Total", ...columns]
+      .map(escapeCsvField)
+      .join(";"),
+  ];
+
+  for (const [, group] of groups) {
+    for (const m of metrics) {
+      const cells = columns.map((c) => {
+        const row = group.byDate.get(c);
+        if (!row) return "";
+        if (m.kind === "diff" && m.diff) {
+          const cashpad = row[m.diff.cashpad];
+          if (cashpad == null) return "";
+          return csvAmount(cashpad - (row[m.diff.royaume] ?? 0));
+        }
+        return csvAmount(m.field ? row[m.field] : null);
+      });
+      lines.push(
+        [
+          group.title,
+          m.label,
+          csvAmount(computeRowTotal(group.byDate, columns, m)),
+          ...cells,
+        ]
+          .map(escapeCsvField)
+          .join(";")
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
 interface TimelineTableProps {
   rows: TimelineRow[];
   columns: string[];
@@ -199,19 +305,7 @@ export function TimelineTable({
     }
   };
 
-  // Groupement par établissement (ordre alphabétique stable depuis la RPC).
-  const groups = new Map<
-    number,
-    { title: string; byDate: Map<string, TimelineRow> }
-  >();
-  for (const r of rows) {
-    let g = groups.get(r.establishment_id);
-    if (!g) {
-      g = { title: r.establishment_title, byDate: new Map() };
-      groups.set(r.establishment_id, g);
-    }
-    g.byDate.set(r.fiscal_date, r);
-  }
+  const groups = groupByEstablishment(rows);
 
   // Une colonne est « calendaire » (fallback) si AUCUNE clôture réelle ne la couvre.
   const fallbackColumns = new Set<string>();
@@ -241,7 +335,7 @@ export function TimelineTable({
     );
   }
 
-  const tableWidth = FIRST_COL_W + columns.length * COL_W;
+  const tableWidth = FIRST_COL_W + TOTAL_COL_W + columns.length * COL_W;
 
   const renderCell = (
     row: TimelineRow | undefined,
@@ -267,6 +361,7 @@ export function TimelineTable({
   const colgroup = (
     <colgroup>
       <col style={{ width: FIRST_COL_W }} />
+      <col style={{ width: TOTAL_COL_W }} />
       {columns.map((c) => (
         <col key={c} style={{ width: COL_W }} />
       ))}
@@ -288,8 +383,15 @@ export function TimelineTable({
           {colgroup}
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 border-r border-border/50 bg-muted px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <th className="sticky left-0 z-10 border-r border-border/30 bg-muted px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Métrique
+              </th>
+              <th
+                className="sticky z-10 border-r border-border/50 bg-muted px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                style={{ left: FIRST_COL_W }}
+                title="Somme de la ligne sur les journées affichées"
+              >
+                Total
               </th>
               {columns.map((c) => (
                 <th
@@ -373,13 +475,17 @@ function GroupRows({
       >
         <th
           scope="row"
-          className="sticky left-0 z-10 border-r border-border/50 bg-muted px-4 py-2 text-left text-sm font-bold text-foreground"
+          className="sticky left-0 z-10 border-r border-border/30 bg-muted px-4 py-2 text-left text-sm font-bold text-foreground"
         >
           <span className="flex items-start gap-2">
             <Store className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="break-words">{title}</span>
           </span>
         </th>
+        <td
+          className="sticky z-10 border-r border-border/50 bg-muted"
+          style={{ left: FIRST_COL_W }}
+        />
         {columns.map((c) => (
           <td key={c} className="border-l border-border/30 bg-muted/20" />
         ))}
@@ -403,7 +509,7 @@ function GroupRows({
             <th
               scope="row"
               className={cn(
-                "sticky left-0 z-10 border-r border-border/50 px-4 py-2 pl-10 text-left font-normal text-muted-foreground",
+                "sticky left-0 z-10 border-r border-border/30 px-4 py-2 pl-10 text-left font-normal text-muted-foreground",
                 rowBg,
                 isDiff && "italic"
               )}
@@ -411,6 +517,7 @@ function GroupRows({
             >
               <span className="block break-words">{m.label}</span>
             </th>
+            <TotalCell byDate={byDate} columns={columns} metric={m} rowBg={rowBg} />
             {columns.map((c) => {
               const row = byDate.get(c);
               const { text, tone } = renderCell(row, m);
@@ -435,5 +542,46 @@ function GroupRows({
         );
       })}
     </>
+  );
+}
+
+/** Cellule Total figée : somme de la ligne sur les journées affichées. */
+function TotalCell({
+  byDate,
+  columns,
+  metric,
+  rowBg,
+}: {
+  byDate: Map<string, TimelineRow>;
+  columns: string[];
+  metric: MetricConfig;
+  rowBg: string;
+}) {
+  const total = computeRowTotal(byDate, columns, metric);
+
+  let text: string;
+  let tone: CellTone;
+  if (total == null) {
+    text = "—";
+    tone = "muted";
+  } else if (metric.kind === "diff") {
+    text = formatDiff(total);
+    tone = total === 0 ? "match" : "mismatch";
+  } else {
+    text = formatCurrency(total);
+    tone = "normal";
+  }
+
+  return (
+    <td
+      className={cn(
+        "sticky z-10 border-r border-border/50 px-3 py-2 text-right font-medium tabular-nums",
+        rowBg,
+        TONE_CLASS[tone]
+      )}
+      style={{ left: FIRST_COL_W }}
+    >
+      {text}
+    </td>
   );
 }
