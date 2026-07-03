@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef } from "react";
-import { Store } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronDown, ChevronsUpDown, ChevronUp, Store } from "lucide-react";
 
 import type { TimelineRow } from "@/lib/services/analyticsService";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -164,6 +164,30 @@ function formatDiff(cents: number): string {
 /** Métrique enrichie d'un séparateur de bloc calculé selon les lignes visibles. */
 type VisibleMetric = MetricConfig & { separatorBefore: boolean };
 
+/**
+ * Tri des groupes d'établissements : par nom, ou par total « Euros Royaume —
+ * selon Royaume » (la métrique de référence). Défaut (null) = ordre RPC
+ * (alphabétique).
+ */
+type GroupSort = { key: "name" | "total"; direction: "asc" | "desc" } | null;
+
+function SortChevron({
+  sorted,
+  direction,
+}: {
+  sorted: boolean;
+  direction?: "asc" | "desc";
+}) {
+  if (!sorted) {
+    return <ChevronsUpDown className="h-3 w-3 opacity-40" aria-hidden="true" />;
+  }
+  return direction === "asc" ? (
+    <ChevronUp className="h-3 w-3" aria-hidden="true" />
+  ) : (
+    <ChevronDown className="h-3 w-3" aria-hidden="true" />
+  );
+}
+
 /** Groupement par établissement (ordre alphabétique stable depuis la RPC). */
 function groupByEstablishment(rows: TimelineRow[]) {
   const groups = new Map<
@@ -290,6 +314,18 @@ export function TimelineTable({
 }: TimelineTableProps) {
   const headerScrollRef = useRef<HTMLDivElement>(null);
 
+  // Tri des groupes d'établissements (les lignes de métriques d'un groupe
+  // restent dans l'ordre METRICS).
+  const [groupSort, setGroupSort] = useState<GroupSort>(null);
+
+  const toggleGroupSort = (key: "name" | "total") => {
+    setGroupSort((prev) => {
+      if (prev?.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
+
   // Lignes visibles selon le toggle Cashpad ; le trait de séparation tombe à
   // chaque changement de bloc entre deux lignes effectivement affichées.
   const shownMetrics = METRICS.filter((m) => showCashpad || !m.cashpad);
@@ -306,6 +342,20 @@ export function TimelineTable({
   };
 
   const groups = groupByEstablishment(rows);
+
+  let groupEntries = Array.from(groups.entries());
+  if (groupSort) {
+    const dir = groupSort.direction === "asc" ? 1 : -1;
+    const euroRoyaume = METRICS.find((m) => m.key === "euro_royaume")!;
+    groupEntries = [...groupEntries].sort(([, a], [, b]) => {
+      if (groupSort.key === "name") {
+        return dir * a.title.localeCompare(b.title, "fr", { sensitivity: "base" });
+      }
+      const ta = computeRowTotal(a.byDate, columns, euroRoyaume) ?? 0;
+      const tb = computeRowTotal(b.byDate, columns, euroRoyaume) ?? 0;
+      return dir * (ta - tb);
+    });
+  }
 
   // Une colonne est « calendaire » (fallback) si AUCUNE clôture réelle ne la couvre.
   const fallbackColumns = new Set<string>();
@@ -383,15 +433,53 @@ export function TimelineTable({
           {colgroup}
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 border-r border-border/30 bg-muted px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Métrique
+              <th
+                className="sticky left-0 z-10 border-r border-border/30 bg-muted px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                aria-sort={
+                  groupSort?.key === "name"
+                    ? groupSort.direction === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSort("name")}
+                  className="-ml-1 flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground"
+                  title="Trier les établissements par nom"
+                >
+                  Métrique
+                  <SortChevron
+                    sorted={groupSort?.key === "name"}
+                    direction={groupSort?.direction}
+                  />
+                </button>
               </th>
               <th
                 className="sticky z-10 border-r border-border/50 bg-muted px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                 style={{ left: FIRST_COL_W }}
                 title="Somme de la ligne sur les journées affichées"
+                aria-sort={
+                  groupSort?.key === "total"
+                    ? groupSort.direction === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
               >
-                Total
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSort("total")}
+                  className="ml-auto flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground"
+                  title="Trier les établissements par total « Euros Royaume — selon Royaume »"
+                >
+                  Total
+                  <SortChevron
+                    sorted={groupSort?.key === "total"}
+                    direction={groupSort?.direction}
+                  />
+                </button>
               </th>
               {columns.map((c) => (
                 <th
@@ -425,7 +513,7 @@ export function TimelineTable({
         >
           {colgroup}
           <tbody>
-            {Array.from(groups.entries()).map(([etabId, group], gi) => (
+            {groupEntries.map(([etabId, group], gi) => (
               <GroupRows
                 key={etabId}
                 title={group.title}
