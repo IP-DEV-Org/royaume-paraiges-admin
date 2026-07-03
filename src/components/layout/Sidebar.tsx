@@ -37,14 +37,16 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
-  const { isFeatureEnabled } = useCurrentAdmin();
+  const { isFeatureEnabled, isSuperAdmin } = useCurrentAdmin();
 
   // Navigation filtrée par les accès de l'admin connecté (groupes vides masqués).
   const visibleGroups = navigationGroups
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => !item.featureKey || isFeatureEnabled(item.featureKey)
+        (item) =>
+          (!item.featureKey || isFeatureEnabled(item.featureKey)) &&
+          (!item.superAdminOnly || isSuperAdmin)
       ),
     }))
     .filter((group) => group.items.length > 0);

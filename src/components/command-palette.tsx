@@ -88,7 +88,9 @@ export function CommandPalette({
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => !item.featureKey || isFeatureEnabled(item.featureKey)
+        (item) =>
+          (!item.featureKey || isFeatureEnabled(item.featureKey)) &&
+          (!item.superAdminOnly || isSuperAdmin)
       ),
     }))
     .filter((group) => group.items.length > 0);
@@ -127,14 +129,6 @@ export function CommandPalette({
               {page.name}
             </CommandItem>
           ))}
-          {isSuperAdmin && (
-            <CommandItem
-              value="Gestion des administrateurs"
-              onSelect={() => navigate("/settings?tab=admins")}
-            >
-              Gestion des administrateurs
-            </CommandItem>
-          )}
         </CommandGroup>
       </CommandList>
     </CommandDialog>

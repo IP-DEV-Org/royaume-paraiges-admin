@@ -18,6 +18,7 @@ import {
   Coins,
   Award,
   Settings as SettingsIcon,
+  UserCog,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +29,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Fonctionnalité désactivable par le super admin ; absent = toujours accessible (Dashboard). */
   featureKey?: FeatureKey;
+  /** Entrée visible et accessible uniquement par un super admin. */
+  superAdminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -80,6 +83,7 @@ export const navigationGroups: NavGroup[] = [
       { name: "RGPD", href: "/gdpr", icon: Shield, featureKey: "gdpr" },
       { name: "Documentation", href: "/documentation", icon: BookText, featureKey: "documentation" },
       { name: "Paramètres", href: "/settings", icon: SettingsIcon, featureKey: "settings" },
+      { name: "Gestion des admins", href: "/settings?tab=admins", icon: UserCog, superAdminOnly: true },
     ],
   },
 ];
