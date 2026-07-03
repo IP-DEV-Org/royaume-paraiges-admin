@@ -36,6 +36,7 @@ export const userKeys = {
   list: (filters: Record<string, unknown>) =>
     [...userKeys.lists(), filters] as const,
   detail: (id: string) => [...userKeys.all, "detail", id] as const,
+  isSuperAdmin: () => [...userKeys.all, "is-super-admin"] as const,
 };
 
 export const questKeys = {

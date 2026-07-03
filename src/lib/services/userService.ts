@@ -68,6 +68,21 @@ export async function getUsers(
   return { data: data || [], count: count || 0 };
 }
 
+/**
+ * Indique si l'utilisateur courant est super-admin (RPC is_super_admin, scopée
+ * sur auth.uid()). Sert à gater les actions réservées au super-admin côté UI —
+ * la vraie barrière reste côté BDD (trigger trg_protect_role, migration 060).
+ */
+export async function getIsCurrentUserSuperAdmin(): Promise<boolean> {
+  const supabase = createClient();
+  const { data, error } = await (supabase.rpc as any)("is_super_admin");
+  if (error) {
+    console.error("Error checking super admin status:", error);
+    return false;
+  }
+  return data === true;
+}
+
 export async function getUser(userId: string): Promise<Profile | null> {
   const supabase = createClient();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import {
   Card,
@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { updateUser } from "@/lib/services/userService";
+import { updateUser, getIsCurrentUserSuperAdmin } from "@/lib/services/userService";
 import { anonymizeUser } from "@/lib/services/gdprService";
 import { userKeys } from "@/lib/queries/keys";
 import { toast } from "sonner";
@@ -47,6 +47,15 @@ interface EditTabProps {
 
 export function EditTab({ user, establishments }: EditTabProps) {
   const queryClient = useQueryClient();
+
+  // Seul un super-admin peut modifier le rôle (garde-fou BDD : trg_protect_role,
+  // migration 060). On désactive le sélecteur pour les autres afin d'éviter une
+  // erreur serveur générique au submit.
+  const { data: isSuperAdmin = false } = useQuery({
+    queryKey: userKeys.isSuperAdmin(),
+    queryFn: getIsCurrentUserSuperAdmin,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // State initialisé depuis les props : le composant monte à l'ouverture de
   // l'onglet, donc les valeurs sont fraîches (pattern handoff, cf. /settings).
@@ -150,6 +159,7 @@ export function EditTab({ user, establishments }: EditTabProps) {
               <Select
                 value={form.role}
                 onValueChange={(value: UserRole) => setForm({ ...form, role: value })}
+                disabled={!isSuperAdmin}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -164,6 +174,11 @@ export function EditTab({ user, establishments }: EditTabProps) {
               <div className="text-xs text-muted-foreground flex items-center gap-2">
                 Role actuel : <UserRoleBadge role={form.role} />
               </div>
+              {!isSuperAdmin && (
+                <p className="text-xs text-muted-foreground">
+                  Seul un super-administrateur peut modifier le rôle d’un compte.
+                </p>
+              )}
             </div>
 
             {(form.role === "employee" || form.role === "establishment") && (
