@@ -12,8 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  AlertTriangle,
-  CheckCircle2,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -29,116 +27,12 @@ import {
   Activity,
 } from "lucide-react";
 import {
-  getDashboardAlerts,
   getDashboardActivity,
   getDashboardGameState,
   getDashboardFinancialHealth,
 } from "@/lib/services/dashboardOverviewService";
 import { dashboardKeys } from "@/lib/queries/keys";
 import { formatCurrency, cn } from "@/lib/utils";
-
-// ============================================================================
-// Section 1 — Alertes
-// ============================================================================
-
-interface AlertItem {
-  label: string;
-  count: number;
-  href: string;
-  hint?: string;
-}
-
-function AlertsSection() {
-  const { data, isLoading } = useQuery({
-    queryKey: dashboardKeys.alerts(),
-    queryFn: getDashboardAlerts,
-    staleTime: 60_000,
-  });
-
-  if (isLoading) {
-    return <SkeletonCard rows={2} />;
-  }
-  if (!data) return null;
-
-  const alerts: AlertItem[] = [
-    {
-      label: "Orphelins Cashpad (7j)",
-      count: data.orphans7d,
-      href: "/reconciliation",
-      hint: "Receipts Royaume sans ticket Cashpad correspondant",
-    },
-    {
-      label: "Tickets Cashpad annulés détectés",
-      count: data.cancelledMatch7d,
-      href: "/reconciliation",
-      hint: "Scan client sur ticket annulé — à investiguer",
-    },
-    {
-      label: "Distributions leaderboard en attente",
-      count: data.pendingDistributions,
-      href: "/rewards/distribute",
-    },
-    {
-      label: "Établissements en dérive d'horloge",
-      count: data.clockDriftEstablishments,
-      href: "/reconciliation/health",
-      hint: "Décalage > 30s vs Cashpad",
-    },
-  ].filter((a) => a.count > 0);
-
-  if (alerts.length === 0) {
-    return (
-      <Card className="border-emerald-500/40 bg-emerald-500/5">
-        <CardContent className="flex items-center gap-3 py-4">
-          <CheckCircle2
-            className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400"
-            aria-hidden="true"
-          />
-          <div>
-            <p className="font-medium">Tout va bien</p>
-            <p className="text-sm text-muted-foreground">
-              Pas d&apos;alerte sur les 7 derniers jours.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="border-amber-500/40 bg-amber-500/5">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <AlertTriangle
-            className="h-4 w-4 text-amber-600 dark:text-amber-400"
-            aria-hidden="true"
-          />
-          {alerts.length} alerte{alerts.length > 1 ? "s" : ""} à traiter
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {alerts.map((alert) => (
-          <Link
-            key={alert.label}
-            href={alert.href}
-            className="flex items-center justify-between rounded-md border bg-background px-3 py-2 transition-colors hover:bg-accent"
-          >
-            <div>
-              <p className="text-sm font-medium">{alert.label}</p>
-              {alert.hint && (
-                <p className="text-xs text-muted-foreground">{alert.hint}</p>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              <Badge variant="destructive">{alert.count}</Badge>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </div>
-          </Link>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
 
 // ============================================================================
 // Section 2 — Activité 7j
@@ -288,7 +182,7 @@ function ActivityKpiCard({ kpi }: { kpi: ActivityKpi }) {
 }
 
 // ============================================================================
-// Section 3 — État du jeu
+// Section 1 — État du jeu
 // ============================================================================
 
 function GameStateSection() {
@@ -402,7 +296,7 @@ function GameStateSection() {
 }
 
 // ============================================================================
-// Section 4 — Santé financière
+// Section 3 — Santé financière
 // ============================================================================
 
 function FinancialHealthSection() {
@@ -540,13 +434,12 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">
-          Pilotage du Royaume — alertes, activité, état du jeu, santé financière
+          Pilotage du Royaume — état du jeu, activité, santé financière
         </p>
       </div>
 
-      <AlertsSection />
-      <ActivitySection />
       <GameStateSection />
+      <ActivitySection />
       <FinancialHealthSection />
     </div>
   );
