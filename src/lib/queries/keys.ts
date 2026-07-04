@@ -165,6 +165,8 @@ export const analyticsKeys = {
     ] as const,
   timelineGlobal: (filters: { startDate: string; endDate: string }) =>
     [...analyticsKeys.all, "timelineGlobal", filters] as const,
+  establishmentKpis: (filters: { startDate: string; endDate: string }) =>
+    [...analyticsKeys.all, "establishmentKpis", filters] as const,
   xpDistribution: (filters: { startDate: string; endDate: string }) =>
     [...analyticsKeys.all, "xpDistribution", filters] as const,
   xpYearlySeries: (year: number) =>

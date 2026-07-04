@@ -1158,6 +1158,99 @@ export async function getAnalyticsTimelineGlobal(
 }
 
 // ============================================================================
+// KPIs par établissement (/analytics/establishments)
+// ============================================================================
+
+/**
+ * Une ligne de KPIs pour un établissement sur une période. Montants en
+ * centimes (1 PdB = 1 centime). `new_clients` = clients dont le PREMIER
+ * receipt all-time dans CET établissement tombe dans la période (un client
+ * déjà connu ailleurs mais nouveau ici compte comme nouveau ici).
+ */
+export interface EstablishmentKpisRow {
+  establishment_id: number;
+  establishment_title: string;
+  sales_count: number;
+  /** CA euros = receipt_lines card + cash, en centimes. */
+  euro_cents: number;
+  /** Paiements PdB = receipt_lines cashback, en centimes. */
+  pdb_spent_cents: number;
+  /** PdB organiques générés = gains source_type='receipt', en centimes. */
+  pdb_generated_cents: number;
+  new_clients: number;
+  /** Clients distincts ayant ≥ 1 receipt sur la période. */
+  active_clients: number;
+  /** Effectif actuel (employee + establishment rattachés), indépendant de la période. */
+  employees_count: number;
+}
+
+/**
+ * KPIs par établissement sur [startDate, endDate] (YYYY-MM-DD inclusifs,
+ * jours calendaires Europe/Paris côté RPC). Une ligne par établissement,
+ * zéros si sans activité. Exclusions is_test + cashpad-system faites par la
+ * RPC (migration 062).
+ */
+export async function getEstablishmentKpis(
+  startDate: string,
+  endDate: string
+): Promise<EstablishmentKpisRow[]> {
+  const supabase = createClient();
+
+  const { data, error } = await (supabase.rpc as any)(
+    "get_establishment_kpis",
+    { p_start_date: startDate, p_end_date: endDate }
+  );
+
+  if (error) throw error;
+  // Les bigint PostgREST peuvent arriver en string → Number() systématique.
+  return ((data || []) as Record<string, unknown>[]).map((r) => ({
+    establishment_id: Number(r.establishment_id),
+    establishment_title: String(r.establishment_title ?? ""),
+    sales_count: Number(r.sales_count) || 0,
+    euro_cents: Number(r.euro_cents) || 0,
+    pdb_spent_cents: Number(r.pdb_spent_cents) || 0,
+    pdb_generated_cents: Number(r.pdb_generated_cents) || 0,
+    new_clients: Number(r.new_clients) || 0,
+    active_clients: Number(r.active_clients) || 0,
+    employees_count: Number(r.employees_count) || 0,
+  }));
+}
+
+/**
+ * Delta paiements PdB Cashpad − Royaume agrégé par établissement sur une
+ * fenêtre timeline (7 jours glissants côté page). `deltaCents` ne somme que
+ * les journées avec donnée Cashpad (`pdb_cashpad_cents` non NULL — même
+ * convention que la colonne Total de /analytics) ; null si aucune.
+ */
+export interface PdbDelta {
+  deltaCents: number | null;
+  daysWithData: number;
+  /** Lignes timeline brutes de l'établissement (pour le détail par jour). */
+  daily: TimelineRow[];
+}
+
+export function computePdbDeltas(rows: TimelineRow[]): Map<number, PdbDelta> {
+  const result = new Map<number, PdbDelta>();
+  for (const row of rows) {
+    let entry = result.get(row.establishment_id);
+    if (!entry) {
+      entry = { deltaCents: null, daysWithData: 0, daily: [] };
+      result.set(row.establishment_id, entry);
+    }
+    entry.daily.push(row);
+    if (row.pdb_cashpad_cents !== null) {
+      entry.deltaCents =
+        (entry.deltaCents ?? 0) + (row.pdb_cashpad_cents - row.pdb_royaume_cents);
+      entry.daysWithData += 1;
+    }
+  }
+  for (const entry of result.values()) {
+    entry.daily.sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date));
+  }
+  return result;
+}
+
+// ============================================================================
 // Répartition des gains d'XP par utilisateur et par jour (/analytics/xp)
 // ============================================================================
 

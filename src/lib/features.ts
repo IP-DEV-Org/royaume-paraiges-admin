@@ -9,6 +9,7 @@
 export const FEATURE_KEYS = [
   "analytics",
   "analytics-xp",
+  "analytics-establishments",
   "reconciliation",
   "users",
   "receipts",
@@ -34,6 +35,7 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
 export const FEATURE_ROUTES: Record<FeatureKey, string> = {
   analytics: "/analytics",
   "analytics-xp": "/analytics/xp",
+  "analytics-establishments": "/analytics/establishments",
   reconciliation: "/reconciliation",
   users: "/users",
   receipts: "/receipts",

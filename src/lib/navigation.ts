@@ -47,6 +47,7 @@ export const navigationGroups: NavGroup[] = [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Analytics", href: "/analytics", icon: BarChart3, featureKey: "analytics" },
       { name: "Répartition XP", href: "/analytics/xp", icon: Zap, featureKey: "analytics-xp" },
+      { name: "Analytics établissements", href: "/analytics/establishments", icon: Building2, featureKey: "analytics-establishments" },
       { name: "Réconciliation Cashpad", href: "/reconciliation", icon: Scale, featureKey: "reconciliation" },
     ],
   },
