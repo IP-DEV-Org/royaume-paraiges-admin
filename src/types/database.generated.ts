@@ -2445,6 +2445,80 @@ export type Database = {
           },
         ]
       }
+      redirect_clicks: {
+        Row: {
+          clicked_at: string
+          device_type: string
+          id: number
+          link_id: string
+          referer: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          clicked_at?: string
+          device_type?: string
+          id?: never
+          link_id: string
+          referer?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          clicked_at?: string
+          device_type?: string
+          id?: never
+          link_id?: string
+          referer?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "redirect_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "redirect_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      redirect_links: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          label: string
+          slug: string
+          target_url: string
+          target_url_android: string | null
+          target_url_ios: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          slug: string
+          target_url: string
+          target_url_android?: string | null
+          target_url_ios?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          slug?: string
+          target_url?: string
+          target_url_android?: string | null
+          target_url_ios?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reward_tiers: {
         Row: {
           badge_type_id: number | null
@@ -2848,21 +2922,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "user_stats"
@@ -2890,6 +2964,22 @@ export type Database = {
           username?: string | null
         }
         Relationships: []
+      }
+      redirect_link_stats: {
+        Row: {
+          last_click_at: string | null
+          link_id: string | null
+          total_clicks: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "redirect_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "redirect_links"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reward_distribution_stats: {
         Row: {
@@ -2928,21 +3018,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "user_stats"
@@ -2962,21 +3052,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "receipts_customer_id_fkey"
+            foreignKeyName: "gains_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "user_stats"
@@ -3252,6 +3342,20 @@ export type Database = {
           id: number
           percentage: number
           used: boolean
+        }[]
+      }
+      get_establishment_kpis: {
+        Args: { p_end_date: string; p_start_date: string }
+        Returns: {
+          active_clients: number
+          employees_count: number
+          establishment_id: number
+          establishment_title: string
+          euro_cents: number
+          new_clients: number
+          pdb_generated_cents: number
+          pdb_spent_cents: number
+          sales_count: number
         }[]
       }
       get_period_bounds: {

@@ -17,6 +17,7 @@ import {
   Scale,
   Coins,
   Award,
+  Link2,
   Settings as SettingsIcon,
   UserCog,
   Zap,
@@ -76,6 +77,7 @@ export const navigationGroups: NavGroup[] = [
     items: [
       { name: "Bières", href: "/content/beers", icon: Beer, featureKey: "beers" },
       { name: "Établissements", href: "/content/establishments", icon: Building2, featureKey: "establishments" },
+      { name: "Liens de redirection", href: "/links", icon: Link2, featureKey: "links" },
     ],
   },
   {
@@ -113,6 +115,7 @@ export const segmentLabels: Record<string, string> = {
   establishments: "Établissements",
   storytelling: "Niveaux & lore",
   templates: "Modèles de coupons",
+  links: "Liens de redirection",
   gdpr: "RGPD",
   documentation: "Documentation",
   settings: "Paramètres",

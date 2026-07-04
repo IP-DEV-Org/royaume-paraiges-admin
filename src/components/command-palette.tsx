@@ -28,6 +28,7 @@ const extraPages: { name: string; href: string; featureKey?: FeatureKey }[] = [
   { name: "Paliers du leaderboard", href: "/rewards/tiers", featureKey: "rewards" },
   { name: "Distribution des récompenses", href: "/rewards/distribute", featureKey: "rewards" },
   { name: "Clôture de saison", href: "/rewards/season", featureKey: "rewards" },
+  { name: "Créer un lien de redirection", href: "/links/create", featureKey: "links" },
 ];
 
 export function useCommandPalette() {

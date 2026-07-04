@@ -180,6 +180,14 @@ export const analyticsKeys = {
     ] as const,
 };
 
+export const redirectLinkKeys = {
+  all: ["redirectLinks"] as const,
+  lists: () => [...redirectLinkKeys.all, "list"] as const,
+  detail: (id: string) => [...redirectLinkKeys.all, "detail", id] as const,
+  clicks: (id: string, days: number) =>
+    [...redirectLinkKeys.all, "clicks", id, days] as const,
+};
+
 export const adminAccessKeys = {
   all: ["adminAccess"] as const,
   current: () => [...adminAccessKeys.all, "current"] as const,

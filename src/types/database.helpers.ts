@@ -130,3 +130,17 @@ export type CashpadReconciliation = Omit<
   status: ReconciliationStatus;
   candidates: ReconciliationCandidate[] | null;
 };
+
+// Liens de redirection redirect.auxparaiges.fr (migration 063)
+export type RedirectLink = Database["public"]["Tables"]["redirect_links"]["Row"];
+export type RedirectLinkInsert = Database["public"]["Tables"]["redirect_links"]["Insert"];
+export type RedirectLinkUpdate = Database["public"]["Tables"]["redirect_links"]["Update"];
+export type RedirectClick = Database["public"]["Tables"]["redirect_clicks"]["Row"];
+
+export type RedirectDeviceType = "ios" | "android" | "desktop" | "other";
+
+/** Lien enrichi des agrégats de la vue `redirect_link_stats`. */
+export type RedirectLinkWithStats = RedirectLink & {
+  total_clicks: number;
+  last_click_at: string | null;
+};
