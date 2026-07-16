@@ -33,6 +33,7 @@ import {
   getAvailablePeriodsByType,
   getCurrentPeriodIdentifier,
 } from "@/lib/services/periodService";
+import { getRanks } from "@/lib/services/rankService";
 import { formatCurrency } from "@/lib/utils";
 import type {
   CouponTemplate,
@@ -40,6 +41,7 @@ import type {
   QuestType,
   AvailablePeriod,
   ConsumptionType,
+  Rank,
 } from "@/types/database";
 
 const CONSUMPTION_TYPES: { value: ConsumptionType; label: string }[] = [
@@ -264,6 +266,7 @@ export function QuestForm({
   const [templates, setTemplates] = useState<CouponTemplate[]>([]);
   const [availablePeriods, setAvailablePeriods] = useState<AvailablePeriod[]>([]);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [ranks, setRanks] = useState<Rank[]>([]);
 
   const form = useForm<QuestFormInput>({
     resolver: zodResolver(formSchema),
@@ -313,7 +316,20 @@ export function QuestForm({
     getActiveTemplates()
       .then((data) => setTemplates(data || []))
       .catch((err) => console.error(err));
+    getRanks()
+      .then((data) => setRanks(data))
+      .catch((err) => console.error(err));
   }, []);
+
+  // Rangs triés (source du barème de répétition, migration 068). L'itération k
+  // correspond au rang de sort_order k ; l'itération 1 = le rang le plus bas =
+  // la config de base ci-dessus. Le plafond effectif est borné par le nombre
+  // d'itérations configurées (migration 069).
+  const sortedRanks = [...ranks].sort((a, b) => a.sort_order - b.sort_order);
+  const maxIterationRows = Math.max(0, sortedRanks.length - 1);
+  // Nom du rang associé à une itération (2 = 2ᵉ rang, etc.).
+  const rankNameForIteration = (iteration: number): string | null =>
+    sortedRanks[iteration - 1]?.name ?? null;
 
   useEffect(() => {
     setLoadingPeriods(true);
@@ -374,16 +390,29 @@ export function QuestForm({
     }
   };
 
+  const makeInheritRow = (): IterationRowInput => ({
+    targetValue: "",
+    couponTemplateId: INHERIT_TEMPLATE,
+    bonusXp: "",
+    bonusCashback: "",
+  });
+
   const handleAddIteration = () => {
-    setValue("iterations", [
-      ...watch("iterations"),
-      {
-        targetValue: "",
-        couponTemplateId: INHERIT_TEMPLATE,
-        bonusXp: "",
-        bonusCashback: "",
-      },
-    ]);
+    setValue("iterations", [...watch("iterations"), makeInheritRow()]);
+  };
+
+  // À l'activation de la répétition, pré-remplir une itération par rang au-delà
+  // du premier (l'itération 1 = la config de base = rang le plus bas), toutes en
+  // héritage par défaut. On ne touche rien si des itérations existent déjà
+  // (édition d'une quête déjà configurée).
+  const handleRepeatableChange = (checked: boolean) => {
+    setValue("isRepeatable", checked);
+    if (checked && watch("iterations").length === 0 && maxIterationRows > 0) {
+      setValue(
+        "iterations",
+        Array.from({ length: maxIterationRows }, makeInheritRow),
+      );
+    }
   };
 
   const handleRemoveIteration = (index: number) => {
@@ -840,143 +869,149 @@ export function QuestForm({
           {/* Répétition selon le niveau */}
           <FormSection
             title="Répétition selon le niveau"
-            description="Désactivée par défaut. Si activée, les joueurs de rang élevé peuvent compléter la quête plusieurs fois par période. Le nombre d'itérations ajoutées ici fixe le maximum affiché côté joueur : chaque itération = une répétition supplémentaire possible (l'itération 1 = la configuration ci-dessus). Un joueur de rang inférieur en voit moins, mais jamais plus que ce qui est configuré ici."
+            description="Désactivée par défaut. À l'activation, une ligne est créée automatiquement par rang (au-delà du premier), toutes en héritage de la config de base ci-dessus. Chaque rang = une répétition supplémentaire possible ; un joueur ne peut compléter que jusqu'au rang qu'il a atteint. Retirez des rangs pour plafonner plus bas, ou personnalisez objectif/récompenses rang par rang."
             action={
               <Switch
                 checked={isRepeatable}
-                onCheckedChange={(checked) =>
-                  setValue("isRepeatable", checked)
-                }
+                onCheckedChange={handleRepeatableChange}
               />
             }
           >
             {isRepeatable && (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Personnalisez l&apos;objectif et les gains des itérations
-                  suivantes. Champ vide = hérite de la quête de base. Le badge
-                  n&apos;est attribué qu&apos;une fois par période.
+                  Une ligne par rang. Champ vide = hérite de la config de base.
+                  Le badge n&apos;est attribué qu&apos;une fois par période.
                 </p>
 
-                {iterations.map((row, idx) => (
-                  <div
-                    key={idx}
-                    className="space-y-3 rounded-lg border bg-background p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        Itération {idx + 2}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveIteration(idx)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <div className="space-y-1">
-                        <Label className="text-xs">
-                          Objectif {targetUnitLabel}
-                        </Label>
-                        <Input
-                          type="number"
-                          step={questType === "amount_spent" ? "0.01" : "1"}
-                          min={questType === "amount_spent" ? 0.01 : 1}
-                          placeholder={baseTargetValue || "hérite"}
-                          {...register(`iterations.${idx}.targetValue`)}
-                        />
-                        {errors.iterations?.[idx]?.targetValue && (
-                          <p className="text-xs text-destructive">
-                            {errors.iterations[idx]?.targetValue?.message}
-                          </p>
-                        )}
+                {iterations.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[600px] space-y-1.5">
+                      {/* En-têtes de colonnes (une seule fois) */}
+                      <div className="grid grid-cols-[1.3fr_0.9fr_1.7fr_0.7fr_0.9fr_2rem] items-center gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Rang</span>
+                        <span>Objectif {targetUnitLabel}</span>
+                        <span>Coupon</span>
+                        <span>XP</span>
+                        <span>Cashback €</span>
+                        <span className="sr-only">Retirer</span>
                       </div>
 
-                      <div className="space-y-1">
-                        <Label className="text-xs">Coupon</Label>
-                        <Controller
-                          control={control}
-                          name={`iterations.${idx}.couponTemplateId`}
-                          render={({ field }) => (
-                            <Select
-                              value={field.value}
-                              onValueChange={field.onChange}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={INHERIT_TEMPLATE}>
-                                  {baseCouponTemplateId &&
-                                  baseCouponTemplateId !== NONE_TEMPLATE
-                                    ? "Hériter (coupon de base)"
-                                    : "Hériter (aucun coupon)"}
-                                </SelectItem>
-                                {templates.map((template) => (
-                                  <SelectItem
-                                    key={template.id}
-                                    value={template.id.toString()}
+                      {iterations.map((row, idx) => {
+                        const rankLabel =
+                          rankNameForIteration(idx + 2) ?? `Rang ${idx + 2}`;
+                        const rowErr = errors.iterations?.[idx];
+                        return (
+                          <div key={idx}>
+                            <div className="grid grid-cols-[1.3fr_0.9fr_1.7fr_0.7fr_0.9fr_2rem] items-center gap-2">
+                              <span
+                                className="truncate text-sm font-medium"
+                                title={rankLabel}
+                              >
+                                {rankLabel}
+                              </span>
+                              <Input
+                                className="h-8 text-sm"
+                                type="number"
+                                step={questType === "amount_spent" ? "0.01" : "1"}
+                                min={questType === "amount_spent" ? 0.01 : 1}
+                                placeholder={baseTargetValue || "hérite"}
+                                {...register(`iterations.${idx}.targetValue`)}
+                              />
+                              <Controller
+                                control={control}
+                                name={`iterations.${idx}.couponTemplateId`}
+                                render={({ field }) => (
+                                  <Select
+                                    value={field.value}
+                                    onValueChange={field.onChange}
                                   >
-                                    {template.name}
-                                    {template.amount
-                                      ? ` (${formatCurrency(template.amount)})`
-                                      : template.percentage
-                                      ? ` (${template.percentage}%)`
-                                      : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label className="text-xs">Bonus XP</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          placeholder={baseBonusXp || "hérite"}
-                          {...register(`iterations.${idx}.bonusXp`)}
-                        />
-                        {errors.iterations?.[idx]?.bonusXp && (
-                          <p className="text-xs text-destructive">
-                            {errors.iterations[idx]?.bonusXp?.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label className="text-xs">Bonus Cashback (EUR)</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          placeholder={baseBonusCashback || "hérite"}
-                          {...register(`iterations.${idx}.bonusCashback`)}
-                        />
-                        {errors.iterations?.[idx]?.bonusCashback && (
-                          <p className="text-xs text-destructive">
-                            {errors.iterations[idx]?.bonusCashback?.message}
-                          </p>
-                        )}
-                      </div>
+                                    <SelectTrigger className="h-8 text-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={INHERIT_TEMPLATE}>
+                                        {baseCouponTemplateId &&
+                                        baseCouponTemplateId !== NONE_TEMPLATE
+                                          ? "Hériter (coupon de base)"
+                                          : "Hériter (aucun coupon)"}
+                                      </SelectItem>
+                                      {templates.map((template) => (
+                                        <SelectItem
+                                          key={template.id}
+                                          value={template.id.toString()}
+                                        >
+                                          {template.name}
+                                          {template.amount
+                                            ? ` (${formatCurrency(template.amount)})`
+                                            : template.percentage
+                                            ? ` (${template.percentage}%)`
+                                            : ""}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              />
+                              <Input
+                                className="h-8 text-sm"
+                                type="number"
+                                min={0}
+                                placeholder={baseBonusXp || "hérite"}
+                                {...register(`iterations.${idx}.bonusXp`)}
+                              />
+                              <Input
+                                className="h-8 text-sm"
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                placeholder={baseBonusCashback || "hérite"}
+                                {...register(`iterations.${idx}.bonusCashback`)}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleRemoveIteration(idx)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {(rowErr?.targetValue ||
+                              rowErr?.bonusXp ||
+                              rowErr?.bonusCashback) && (
+                              <p className="px-1 pt-0.5 text-[11px] text-destructive">
+                                {rowErr?.targetValue?.message ??
+                                  rowErr?.bonusXp?.message ??
+                                  rowErr?.bonusCashback?.message}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
+                )}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddIteration}
-                >
-                  Ajouter une itération
-                </Button>
+                {iterations.length < maxIterationRows ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddIteration}
+                  >
+                    Ajouter un rang
+                  </Button>
+                ) : (
+                  maxIterationRows > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Tous les rangs ({sortedRanks.length}) sont couverts —
+                      au-delà, une itération n&apos;aurait aucun effet (plafond
+                      lié au rang).
+                    </p>
+                  )
+                )}
               </div>
             )}
           </FormSection>
