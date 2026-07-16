@@ -23,6 +23,36 @@ export const consumptionTypeSchema = z.enum([
 export const periodTypeSchema = z.enum(["weekly", "monthly", "yearly"]);
 
 /**
+ * Override d'une itération de quête répétable (table `quest_iterations`,
+ * migration 066). Itération 1 = la quête elle-même ; toute valeur null hérite
+ * de la quête de base (target_value / coupon / bonus).
+ */
+export const questIterationSchema = z.object({
+  iteration: z.number().int().min(2),
+  target_value: z.number().int().positive().nullish(),
+  coupon_template_id: z.number().int().positive().nullish(),
+  bonus_xp: z.number().int().min(0).nullish(),
+  bonus_cashback: z.number().int().min(0).nullish(),
+});
+
+export const questIterationsArraySchema = z
+  .array(questIterationSchema)
+  .superRefine((iterations, ctx) => {
+    const seen = new Set<number>();
+    for (const it of iterations) {
+      if (seen.has(it.iteration)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Itération ${it.iteration} définie plusieurs fois`,
+        });
+      }
+      seen.add(it.iteration);
+    }
+  });
+
+export type QuestIterationInput = z.infer<typeof questIterationSchema>;
+
+/**
  * Validation des payloads d'insert/update sur la table `quests`.
  * Aligné avec les colonnes de la BDD (pas avec le form admin — celui-ci peut avoir des champs calculés).
  */
@@ -44,6 +74,7 @@ export const questSchema = z
     coupon_template_id: z.number().int().positive().nullish(),
     badge_type_id: z.number().int().positive().nullish(),
     is_active: z.boolean().default(true),
+    is_repeatable: z.boolean().default(false),
     display_order: z.number().int().min(0).default(0),
   })
   .superRefine((data, ctx) => {
@@ -96,6 +127,7 @@ export const questUpdateSchema = z
     coupon_template_id: z.number().int().positive().nullish(),
     badge_type_id: z.number().int().positive().nullish(),
     is_active: z.boolean().optional(),
+    is_repeatable: z.boolean().optional(),
     display_order: z.number().int().min(0).optional(),
   })
   .superRefine((data, ctx) => {

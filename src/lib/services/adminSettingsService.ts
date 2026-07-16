@@ -10,7 +10,31 @@ import type { AdminSetting } from "@/types/database";
 export const SETTING_KEYS = {
   QUEST_ALERT_RATIO_PCT: "quest_alert_ratio_pct",
   QUEST_REFERENCE_PRICES_CENTS: "quest_reference_prices_cents",
+  QUEST_REPEAT_LEVEL_TIERS: "quest_repeat_level_tiers",
 } as const;
+
+/**
+ * Palier du barème manuel « répétition des défis par niveau » (migration 066).
+ * Le palier de plus haut min_level atteint par le joueur s'applique.
+ */
+export type QuestRepeatLevelTier = {
+  min_level: number;
+  max_completions: number;
+};
+
+/**
+ * Configuration de répétition des défis (migration 068, bimodale) :
+ * - "auto" (défaut) : plafond lié au rang du joueur (rang N → N complétions,
+ *   suit dynamiquement la table `ranks`) ;
+ * - "manual" : barème explicite par niveau (tableau de paliers).
+ */
+export type QuestRepeatConfig =
+  | { mode: "auto" }
+  | { mode: "manual"; tiers: QuestRepeatLevelTier[] };
+
+export const DEFAULT_QUEST_REPEAT_LEVEL_TIERS: QuestRepeatLevelTier[] = [
+  { min_level: 1, max_completions: 1 },
+];
 
 export type QuestReferencePrices = {
   biere?: number;
@@ -74,6 +98,35 @@ export async function getQuestReferencePrices(): Promise<QuestReferencePrices> {
   const setting = await getAdminSetting(SETTING_KEYS.QUEST_REFERENCE_PRICES_CENTS);
   if (!setting || !setting.value || typeof setting.value !== "object") return {};
   return setting.value as QuestReferencePrices;
+}
+
+/**
+ * Helper typé : configuration de répétition des défis (migration 068).
+ * Un tableau de paliers valide et non vide = barème manuel ; tout le reste
+ * ("auto", clé absente, valeur invalide) = mode automatique lié aux rangs —
+ * même résolution que la fonction SQL get_max_quest_completions.
+ */
+export async function getQuestRepeatConfig(): Promise<QuestRepeatConfig> {
+  const setting = await getAdminSetting(SETTING_KEYS.QUEST_REPEAT_LEVEL_TIERS);
+  const raw = setting?.value;
+
+  if (Array.isArray(raw)) {
+    const tiers = raw.filter(
+      (t): t is QuestRepeatLevelTier =>
+        typeof t === "object" &&
+        t !== null &&
+        typeof (t as QuestRepeatLevelTier).min_level === "number" &&
+        typeof (t as QuestRepeatLevelTier).max_completions === "number"
+    );
+    if (tiers.length > 0) {
+      return {
+        mode: "manual",
+        tiers: [...tiers].sort((a, b) => a.min_level - b.min_level),
+      };
+    }
+  }
+
+  return { mode: "auto" };
 }
 
 /**

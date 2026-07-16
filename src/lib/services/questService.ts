@@ -8,10 +8,17 @@ import type {
   QuestPeriod,
   QuestPeriodInsert,
   QuestEstablishmentInsert,
+  QuestIteration,
+  QuestIterationInsert,
   PeriodType,
   QuestType,
 } from "@/types/database";
-import { questSchema, questUpdateSchema } from "@/lib/schemas/quest.schema";
+import {
+  questSchema,
+  questUpdateSchema,
+  questIterationsArraySchema,
+  type QuestIterationInput,
+} from "@/lib/schemas/quest.schema";
 
 // CRUD Quests
 export async function getQuests(periodType?: PeriodType): Promise<QuestWithRelations[]> {
@@ -55,7 +62,9 @@ export async function getQuest(id: number): Promise<QuestWithRelations | null> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("quests")
-    .select("*, coupon_templates(name, amount, percentage), badge_types(name), quest_periods(*)")
+    .select(
+      "*, coupon_templates(name, amount, percentage), badge_types(name), quest_periods(*), quest_iterations(*)"
+    )
     .eq("id", id)
     .single();
 
@@ -158,6 +167,7 @@ export async function duplicateQuest(id: number): Promise<Quest> {
     bonus_cashback: original.bonus_cashback,
     display_order: original.display_order,
     is_active: false,
+    is_repeatable: original.is_repeatable,
   };
 
   const created = await createQuest(insertPayload);
@@ -170,6 +180,17 @@ export async function duplicateQuest(id: number): Promise<Quest> {
   const establishmentIds = await getQuestEstablishments(id);
   if (establishmentIds.length > 0) {
     await setQuestEstablishments(created.id, establishmentIds);
+  }
+
+  const iterations = (original.quest_iterations || []).map((it) => ({
+    iteration: it.iteration,
+    target_value: it.target_value,
+    coupon_template_id: it.coupon_template_id,
+    bonus_xp: it.bonus_xp,
+    bonus_cashback: it.bonus_cashback,
+  }));
+  if (iterations.length > 0) {
+    await setQuestIterations(created.id, iterations);
   }
 
   return created;
@@ -408,6 +429,60 @@ export async function setQuestEstablishments(
     }));
     const { error: insertError } = await supabase
       .from("quests_establishments")
+      .insert(rows as never);
+
+    if (insertError) throw insertError;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Quest iterations — overrides par itération des quêtes répétables
+// (migration 066). Itération 1 = la quête elle-même ; les lignes couvrent
+// les itérations >= 2. Chaque champ NULL hérite de la quête de base.
+// ---------------------------------------------------------------------
+
+export async function getQuestIterations(questId: number): Promise<QuestIteration[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("quest_iterations")
+    .select("*")
+    .eq("quest_id", questId)
+    .order("iteration");
+
+  if (error) throw error;
+  return (data || []) as QuestIteration[];
+}
+
+/**
+ * Remplace les overrides d'itérations d'une quête (DELETE + INSERT).
+ * Passer un tableau vide supprime tous les overrides (toutes les itérations
+ * héritent alors de la quête de base).
+ */
+export async function setQuestIterations(
+  questId: number,
+  iterations: QuestIterationInput[]
+): Promise<void> {
+  questIterationsArraySchema.parse(iterations);
+  const supabase = createClient();
+
+  const { error: deleteError } = await supabase
+    .from("quest_iterations")
+    .delete()
+    .eq("quest_id", questId);
+
+  if (deleteError) throw deleteError;
+
+  if (iterations.length > 0) {
+    const rows: QuestIterationInsert[] = iterations.map((it) => ({
+      quest_id: questId,
+      iteration: it.iteration,
+      target_value: it.target_value ?? null,
+      coupon_template_id: it.coupon_template_id ?? null,
+      bonus_xp: it.bonus_xp ?? null,
+      bonus_cashback: it.bonus_cashback ?? null,
+    }));
+    const { error: insertError } = await supabase
+      .from("quest_iterations")
       .insert(rows as never);
 
     if (insertError) throw insertError;

@@ -91,6 +91,8 @@ export const adminSettingsKeys = {
   questAlertRatio: () => [...adminSettingsKeys.all, "questAlertRatio"] as const,
   questReferencePrices: () =>
     [...adminSettingsKeys.all, "questReferencePrices"] as const,
+  questRepeatLevelTiers: () =>
+    [...adminSettingsKeys.all, "questRepeatLevelTiers"] as const,
   avgTicket12m: () => [...adminSettingsKeys.all, "avgTicket12m"] as const,
 };
 

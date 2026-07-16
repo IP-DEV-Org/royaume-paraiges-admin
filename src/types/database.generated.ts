@@ -1913,6 +1913,7 @@ export type Database = {
           customer_id: string
           final_value: number
           id: number
+          iteration: number
           period_identifier: string
           period_type: string
           quest_id: number
@@ -1929,6 +1930,7 @@ export type Database = {
           customer_id: string
           final_value: number
           id?: number
+          iteration?: number
           period_identifier: string
           period_type: string
           quest_id: number
@@ -1945,6 +1947,7 @@ export type Database = {
           customer_id?: string
           final_value?: number
           id?: number
+          iteration?: number
           period_identifier?: string
           period_type?: string
           quest_id?: number
@@ -2010,6 +2013,54 @@ export type Database = {
           },
         ]
       }
+      quest_iterations: {
+        Row: {
+          bonus_cashback: number | null
+          bonus_xp: number | null
+          coupon_template_id: number | null
+          created_at: string
+          iteration: number
+          quest_id: number
+          target_value: number | null
+          updated_at: string
+        }
+        Insert: {
+          bonus_cashback?: number | null
+          bonus_xp?: number | null
+          coupon_template_id?: number | null
+          created_at?: string
+          iteration: number
+          quest_id: number
+          target_value?: number | null
+          updated_at?: string
+        }
+        Update: {
+          bonus_cashback?: number | null
+          bonus_xp?: number | null
+          coupon_template_id?: number | null
+          created_at?: string
+          iteration?: number
+          quest_id?: number
+          target_value?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quest_iterations_coupon_template_id_fkey"
+            columns: ["coupon_template_id"]
+            isOneToOne: false
+            referencedRelation: "coupon_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quest_iterations_quest_id_fkey"
+            columns: ["quest_id"]
+            isOneToOne: false
+            referencedRelation: "quests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quest_periods: {
         Row: {
           created_at: string | null
@@ -2042,6 +2093,7 @@ export type Database = {
       quest_progress: {
         Row: {
           completed_at: string | null
+          completions_count: number
           created_at: string
           current_value: number
           customer_id: string
@@ -2056,6 +2108,7 @@ export type Database = {
         }
         Insert: {
           completed_at?: string | null
+          completions_count?: number
           created_at?: string
           current_value?: number
           customer_id: string
@@ -2070,6 +2123,7 @@ export type Database = {
         }
         Update: {
           completed_at?: string | null
+          completions_count?: number
           created_at?: string
           current_value?: number
           customer_id?: string
@@ -2128,6 +2182,7 @@ export type Database = {
           display_order: number
           id: number
           is_active: boolean
+          is_repeatable: boolean
           lore: string | null
           name: string
           period_type: string
@@ -2150,6 +2205,7 @@ export type Database = {
           display_order?: number
           id?: number
           is_active?: boolean
+          is_repeatable?: boolean
           lore?: string | null
           name: string
           period_type: string
@@ -2172,6 +2228,7 @@ export type Database = {
           display_order?: number
           id?: number
           is_active?: boolean
+          is_repeatable?: boolean
           lore?: string | null
           name?: string
           period_type?: string
@@ -3358,6 +3415,11 @@ export type Database = {
           sales_count: number
         }[]
       }
+      get_max_quest_completions: {
+        Args: { p_customer_id: string }
+        Returns: number
+      }
+      get_my_max_quest_completions: { Args: never; Returns: number }
       get_period_bounds: {
         Args: { p_period_identifier: string; p_period_type: string }
         Returns: {
@@ -3417,6 +3479,10 @@ export type Database = {
           customer_id: string
           total_xp: number
         }[]
+      }
+      get_quest_iteration_target: {
+        Args: { p_iteration: number; p_quest_id: number }
+        Returns: number
       }
       get_season_rank_from_level: { Args: { p_level: number }; Returns: Json }
       get_season_xp: { Args: { p_customer_id: string }; Returns: number }

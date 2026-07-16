@@ -27,6 +27,7 @@ import {
   setQuestPeriods,
   getQuestEstablishments,
   setQuestEstablishments,
+  setQuestIterations,
 } from "@/lib/services/questService";
 import {
   parseQuestRedundancyError,
@@ -74,13 +75,31 @@ export default function EditQuestPage() {
 
         // amount_spent stocké en centimes → afficher en euros.
         // Sinon afficher la valeur brute (PdB / unités).
-        const targetValueDisplay =
-          quest.quest_type === "amount_spent"
-            ? (quest.target_value / 100).toString()
-            : quest.target_value.toString();
+        const isAmountSpent = quest.quest_type === "amount_spent";
+        const targetValueDisplay = isAmountSpent
+          ? (quest.target_value / 100).toString()
+          : quest.target_value.toString();
 
         const periods =
           quest.quest_periods?.map((p) => p.period_identifier) || [];
+
+        // Overrides d'itérations : null = hérite de la base = champ vide.
+        const iterations = [...(quest.quest_iterations || [])]
+          .sort((a, b) => a.iteration - b.iteration)
+          .map((it) => ({
+            targetValue:
+              it.target_value === null
+                ? ""
+                : isAmountSpent
+                ? (it.target_value / 100).toString()
+                : it.target_value.toString(),
+            couponTemplateId: it.coupon_template_id?.toString() || "inherit",
+            bonusXp: it.bonus_xp === null ? "" : it.bonus_xp.toString(),
+            bonusCashback:
+              it.bonus_cashback === null
+                ? ""
+                : (it.bonus_cashback / 100).toString(),
+          }));
 
         setQuestName(quest.name);
         setInitial({
@@ -98,6 +117,8 @@ export default function EditQuestPage() {
           bonusCashback: (quest.bonus_cashback / 100).toString(),
           displayOrder: quest.display_order.toString(),
           isActive: quest.is_active,
+          isRepeatable: quest.is_repeatable,
+          iterations,
           periods,
           establishments,
         });
@@ -130,12 +151,14 @@ export default function EditQuestPage() {
       bonus_cashback: payload.bonus_cashback,
       display_order: payload.display_order,
       is_active: payload.is_active,
+      is_repeatable: payload.is_repeatable,
     };
 
     try {
       await updateQuest(id, quest);
       await setQuestPeriods(id, payload.periods);
       await setQuestEstablishments(id, payload.establishments);
+      await setQuestIterations(id, payload.iterations);
 
       queryClient.invalidateQueries({ queryKey: questKeys.all });
       toast.success("Quête modifiée avec succès");

@@ -12,6 +12,7 @@ import {
   createQuest,
   setQuestPeriods,
   setQuestEstablishments,
+  setQuestIterations,
   deleteQuest,
 } from "@/lib/services/questService";
 import {
@@ -43,6 +44,7 @@ export default function CreateQuestPage() {
       bonus_cashback: payload.bonus_cashback,
       display_order: payload.display_order,
       is_active: payload.is_active,
+      is_repeatable: payload.is_repeatable,
     };
 
     let createdQuestId: number | null = null;
@@ -58,6 +60,9 @@ export default function CreateQuestPage() {
           createdQuest.id,
           payload.establishments,
         );
+      }
+      if (payload.iterations.length > 0) {
+        await setQuestIterations(createdQuest.id, payload.iterations);
       }
 
       queryClient.invalidateQueries({ queryKey: questKeys.all });

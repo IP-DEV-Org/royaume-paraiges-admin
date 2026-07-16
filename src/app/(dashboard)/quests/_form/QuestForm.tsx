@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -52,6 +52,33 @@ const CONSUMPTION_TYPES: { value: ConsumptionType; label: string }[] = [
   { value: "boucherie", label: "Boucherie" },
 ];
 
+function FormSection({
+  title,
+  description,
+  children,
+  action,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="space-y-4 rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+          {description && (
+            <p className="text-sm text-muted-foreground">{description}</p>
+          )}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -62,6 +89,17 @@ function generateSlug(name: string): string {
 }
 
 const NONE_TEMPLATE = "none";
+// Itérations : champ vide / "inherit" = hérite de la quête de base (NULL en BDD)
+const INHERIT_TEMPLATE = "inherit";
+
+const iterationRowSchema = z.object({
+  targetValue: z.string(),
+  couponTemplateId: z.string(),
+  bonusXp: z.string(),
+  bonusCashback: z.string(),
+});
+
+export type IterationRowInput = z.infer<typeof iterationRowSchema>;
 
 const formSchema = z
   .object({
@@ -98,6 +136,8 @@ const formSchema = z
     bonusCashback: z.string(),
     displayOrder: z.string(),
     isActive: z.boolean(),
+    isRepeatable: z.boolean(),
+    iterations: z.array(iterationRowSchema),
     periods: z.array(z.string()),
     establishments: z.array(z.number()),
   })
@@ -139,9 +179,52 @@ const formSchema = z
         path: ["bonusXp"],
       });
     }
+
+    if (data.isRepeatable) {
+      data.iterations.forEach((row, idx) => {
+        if (row.targetValue !== "") {
+          const value =
+            data.questType === "amount_spent"
+              ? parseFloat(row.targetValue)
+              : parseInt(row.targetValue, 10);
+          if (isNaN(value) || value <= 0) {
+            ctx.addIssue({
+              code: "custom",
+              message: "Objectif d'itération invalide (nombre > 0 ou vide pour hériter).",
+              path: ["iterations", idx, "targetValue"],
+            });
+          }
+        }
+        if (row.bonusXp !== "" && (isNaN(parseInt(row.bonusXp, 10)) || parseInt(row.bonusXp, 10) < 0)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Bonus XP invalide (entier >= 0 ou vide pour hériter).",
+            path: ["iterations", idx, "bonusXp"],
+          });
+        }
+        if (
+          row.bonusCashback !== "" &&
+          (isNaN(parseFloat(row.bonusCashback)) || parseFloat(row.bonusCashback) < 0)
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Bonus cashback invalide (nombre >= 0 ou vide pour hériter).",
+            path: ["iterations", idx, "bonusCashback"],
+          });
+        }
+      });
+    }
   });
 
 export type QuestFormInput = z.infer<typeof formSchema>;
+
+export interface QuestIterationPayload {
+  iteration: number;
+  target_value: number | null;
+  coupon_template_id: number | null;
+  bonus_xp: number | null;
+  bonus_cashback: number | null;
+}
 
 export interface QuestFormPayload {
   name: string;
@@ -157,6 +240,8 @@ export interface QuestFormPayload {
   bonus_cashback: number;
   display_order: number;
   is_active: boolean;
+  is_repeatable: boolean;
+  iterations: QuestIterationPayload[];
   periods: string[];
   establishments: number[];
 }
@@ -196,6 +281,8 @@ export function QuestForm({
       bonusCashback: initial?.bonusCashback ?? "0",
       displayOrder: initial?.displayOrder ?? "0",
       isActive: initial?.isActive ?? true,
+      isRepeatable: initial?.isRepeatable ?? false,
+      iterations: initial?.iterations ?? [],
       periods: initial?.periods ?? [],
       establishments: initial?.establishments ?? [],
     },
@@ -215,6 +302,12 @@ export function QuestForm({
   const periods = watch("periods");
   const establishments = watch("establishments");
   const isActive = watch("isActive");
+  const isRepeatable = watch("isRepeatable");
+  const iterations = watch("iterations");
+  const baseTargetValue = watch("targetValue");
+  const baseBonusXp = watch("bonusXp");
+  const baseBonusCashback = watch("bonusCashback");
+  const baseCouponTemplateId = watch("couponTemplateId");
 
   useEffect(() => {
     getActiveTemplates()
@@ -281,6 +374,25 @@ export function QuestForm({
     }
   };
 
+  const handleAddIteration = () => {
+    setValue("iterations", [
+      ...watch("iterations"),
+      {
+        targetValue: "",
+        couponTemplateId: INHERIT_TEMPLATE,
+        bonusXp: "",
+        bonusCashback: "",
+      },
+    ]);
+  };
+
+  const handleRemoveIteration = (index: number) => {
+    setValue(
+      "iterations",
+      watch("iterations").filter((_, i) => i !== index),
+    );
+  };
+
   const submit = handleSubmit(async (values) => {
     // amount_spent : euros saisis → centimes stockés. Autres types : int direct.
     const target =
@@ -308,6 +420,29 @@ export function QuestForm({
       bonus_cashback: Math.round(parseFloat(values.bonusCashback) * 100) || 0,
       display_order: parseInt(values.displayOrder, 10) || 0,
       is_active: values.isActive,
+      is_repeatable: values.isRepeatable,
+      // Champ vide = null = hérite de la quête de base. Les numéros d'itération
+      // sont contigus à partir de 2 (itération 1 = la quête elle-même).
+      iterations: values.isRepeatable
+        ? values.iterations.map((row, idx) => ({
+            iteration: idx + 2,
+            target_value:
+              row.targetValue === ""
+                ? null
+                : values.questType === "amount_spent"
+                ? Math.round(parseFloat(row.targetValue) * 100)
+                : parseInt(row.targetValue, 10),
+            coupon_template_id:
+              row.couponTemplateId && row.couponTemplateId !== INHERIT_TEMPLATE
+                ? parseInt(row.couponTemplateId, 10)
+                : null,
+            bonus_xp: row.bonusXp === "" ? null : parseInt(row.bonusXp, 10) || 0,
+            bonus_cashback:
+              row.bonusCashback === ""
+                ? null
+                : Math.round(parseFloat(row.bonusCashback) * 100) || 0,
+          }))
+        : [],
       periods: values.periods,
       establishments: values.establishments,
     };
@@ -345,8 +480,8 @@ export function QuestForm({
 
   return (
     <form onSubmit={submit}>
-      <Card>
-        <CardHeader>
+      <Card className="border-none bg-transparent shadow-none">
+        <CardHeader className="px-0">
           <CardTitle>Configuration de la quête</CardTitle>
           <CardDescription>
             {mode === "create"
@@ -354,206 +489,218 @@ export function QuestForm({
               : "Modifiez l'objectif et les récompenses"}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Nom et slug */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nom de la quête *</Label>
-              <Input
-                id="name"
-                placeholder="Ex: Habitué de la semaine"
-                {...register("name")}
-                onChange={(e) => handleNameChange(e.target.value)}
-              />
-              {errors.name && (
-                <p className="text-xs text-destructive">{errors.name.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="slug">Identifiant unique (slug) *</Label>
-              <Input
-                id="slug"
-                placeholder="habitue_semaine"
-                className="font-mono"
-                {...register("slug")}
-              />
-              {errors.slug && (
-                <p className="text-xs text-destructive">{errors.slug.message}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              placeholder="Ex: Scannez 5 tickets cette semaine pour gagner une récompense"
-              rows={2}
-              {...register("description")}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="lore">Texte narratif (lore)</Label>
-            <Textarea
-              id="lore"
-              placeholder="Ex: Les anciens racontent que seuls les plus assidus peuvent relever ce défi..."
-              rows={3}
-              {...register("lore")}
-            />
-            <p className="text-xs text-muted-foreground">
-              Texte immersif affiché dans la modale de la quête côté client
-            </p>
-          </div>
-
-          {/* Type / objectif / période */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Type de quête *</Label>
-              <Controller
-                control={control}
-                name="questType"
-                render={({ field }) => (
-                  <Select
-                    value={field.value}
-                    onValueChange={(v) => handleQuestTypeChange(v as QuestType)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="xp_earned">
-                        Gagner de l&apos;XP
-                      </SelectItem>
-                      <SelectItem value="cashback_earned">
-                        Collecter des Paraiges de Bronze
-                      </SelectItem>
-                      <SelectItem value="amount_spent">
-                        Dépenser de l&apos;argent
-                      </SelectItem>
-                      <SelectItem value="establishments_visited">
-                        Visiter des établissements
-                      </SelectItem>
-                      <SelectItem value="orders_count">
-                        Passer des commandes
-                      </SelectItem>
-                      <SelectItem value="quest_completed">
-                        Compléter des quêtes
-                      </SelectItem>
-                      <SelectItem value="consumption_count">
-                        Consommer un type de produit
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+        <CardContent className="space-y-5 px-0">
+          {/* Informations générales */}
+          <FormSection
+            title="Informations générales"
+            description="Nom, identifiant et textes affichés côté client."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nom de la quête *</Label>
+                <Input
+                  id="name"
+                  placeholder="Ex: Habitué de la semaine"
+                  {...register("name")}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                />
+                {errors.name && (
+                  <p className="text-xs text-destructive">
+                    {errors.name.message}
+                  </p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="slug">Identifiant unique (slug) *</Label>
+                <Input
+                  id="slug"
+                  placeholder="habitue_semaine"
+                  className="font-mono"
+                  {...register("slug")}
+                />
+                {errors.slug && (
+                  <p className="text-xs text-destructive">
+                    {errors.slug.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Ex: Scannez 5 tickets cette semaine pour gagner une récompense"
+                rows={2}
+                {...register("description")}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="targetValue">
-                Objectif {targetUnitLabel} *
-              </Label>
-              <Input
-                id="targetValue"
-                type="number"
-                step={questType === "amount_spent" ? "0.01" : "1"}
-                min={questType === "amount_spent" ? 0.01 : 1}
-                {...register("targetValue")}
+              <Label htmlFor="lore">Texte narratif (lore)</Label>
+              <Textarea
+                id="lore"
+                placeholder="Ex: Les anciens racontent que seuls les plus assidus peuvent relever ce défi..."
+                rows={3}
+                {...register("lore")}
               />
-              <p className="text-xs text-muted-foreground">{targetHelp}</p>
-              {errors.targetValue && (
-                <p className="text-xs text-destructive">
-                  {errors.targetValue.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Période *</Label>
-              <Controller
-                control={control}
-                name="periodType"
-                render={({ field }) => (
-                  <Select
-                    value={field.value}
-                    onValueChange={(v) => handlePeriodTypeChange(v as PeriodType)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        value="weekly"
-                        disabled={questType === "quest_completed"}
-                      >
-                        Hebdomadaire
-                      </SelectItem>
-                      <SelectItem value="monthly">Mensuel</SelectItem>
-                      <SelectItem value="yearly">Annuel</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errors.periodType && (
-                <p className="text-xs text-destructive">
-                  {errors.periodType.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Type de produit (consumption_count) */}
-          {questType === "consumption_count" && (
-            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-              <Label htmlFor="consumptionType">
-                Type de produit à compter *
-              </Label>
-              <Controller
-                control={control}
-                name="consumptionType"
-                render={({ field }) => (
-                  <Select
-                    value={field.value || ""}
-                    onValueChange={field.onChange}
-                  >
-                    <SelectTrigger id="consumptionType">
-                      <SelectValue placeholder="Sélectionner un type de produit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CONSUMPTION_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errors.consumptionType && (
-                <p className="text-xs text-destructive">
-                  {errors.consumptionType.message}
-                </p>
-              )}
               <p className="text-xs text-muted-foreground">
-                La progression compte la somme des <code>quantity</code> dans{" "}
-                <code>receipt_consumption_items</code> du type choisi sur la
-                période.
+                Texte immersif affiché dans la modale de la quête côté client
               </p>
             </div>
-          )}
+          </FormSection>
+
+          {/* Objectif */}
+          <FormSection
+            title="Objectif"
+            description="Définissez ce que le joueur doit accomplir et sur quelle période."
+          >
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Type de quête *</Label>
+                <Controller
+                  control={control}
+                  name="questType"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) =>
+                        handleQuestTypeChange(v as QuestType)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="xp_earned">
+                          Gagner de l&apos;XP
+                        </SelectItem>
+                        <SelectItem value="cashback_earned">
+                          Collecter des Paraiges de Bronze
+                        </SelectItem>
+                        <SelectItem value="amount_spent">
+                          Dépenser de l&apos;argent
+                        </SelectItem>
+                        <SelectItem value="establishments_visited">
+                          Visiter des établissements
+                        </SelectItem>
+                        <SelectItem value="orders_count">
+                          Passer des commandes
+                        </SelectItem>
+                        <SelectItem value="quest_completed">
+                          Compléter des quêtes
+                        </SelectItem>
+                        <SelectItem value="consumption_count">
+                          Consommer un type de produit
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="targetValue">
+                  Objectif {targetUnitLabel} *
+                </Label>
+                <Input
+                  id="targetValue"
+                  type="number"
+                  step={questType === "amount_spent" ? "0.01" : "1"}
+                  min={questType === "amount_spent" ? 0.01 : 1}
+                  {...register("targetValue")}
+                />
+                <p className="text-xs text-muted-foreground">{targetHelp}</p>
+                {errors.targetValue && (
+                  <p className="text-xs text-destructive">
+                    {errors.targetValue.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Période *</Label>
+                <Controller
+                  control={control}
+                  name="periodType"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) =>
+                        handlePeriodTypeChange(v as PeriodType)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          value="weekly"
+                          disabled={questType === "quest_completed"}
+                        >
+                          Hebdomadaire
+                        </SelectItem>
+                        <SelectItem value="monthly">Mensuel</SelectItem>
+                        <SelectItem value="yearly">Annuel</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.periodType && (
+                  <p className="text-xs text-destructive">
+                    {errors.periodType.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Type de produit (consumption_count) */}
+            {questType === "consumption_count" && (
+              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+                <Label htmlFor="consumptionType">
+                  Type de produit à compter *
+                </Label>
+                <Controller
+                  control={control}
+                  name="consumptionType"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || ""}
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger id="consumptionType">
+                        <SelectValue placeholder="Sélectionner un type de produit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONSUMPTION_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.consumptionType && (
+                  <p className="text-xs text-destructive">
+                    {errors.consumptionType.message}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  La progression compte la somme des <code>quantity</code> dans{" "}
+                  <code>receipt_consumption_items</code> du type choisi sur la
+                  période.
+                </p>
+              </div>
+            )}
+          </FormSection>
 
           {/* Périodes spécifiques */}
-          <div className="space-y-4 rounded-lg border p-4">
-            <div className="space-y-1">
-              <Label>Périodes spécifiques (optionnel)</Label>
-              <p className="text-sm text-muted-foreground">
-                Laissez vide pour activer la quête sur toutes les périodes.
-                Sinon, sélectionnez les périodes sur lesquelles cette quête sera
-                active.
-              </p>
-            </div>
-
+          <FormSection
+            title="Périodes de disponibilité"
+            description="Laissez vide pour activer la quête sur toutes les périodes. Sinon, sélectionnez les périodes sur lesquelles cette quête sera active."
+          >
             {periods.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {[...periods].sort().map((period) => (
@@ -594,33 +741,25 @@ export function QuestForm({
               onTogglePeriod={handleTogglePeriod}
               loadingPeriods={loadingPeriods}
             />
-          </div>
+          </FormSection>
 
           {/* Établissements */}
-          <div className="space-y-4 rounded-lg border p-4">
-            <div className="space-y-1">
-              <Label>Établissements ciblés</Label>
-              <p className="text-sm text-muted-foreground">
-                Restreignez la quête à certains établissements ou laissez vide
-                pour qu&apos;elle soit globale. Les triggers de redondance
-                bloquent toute configuration qui créerait un conflit avec une
-                autre quête active de même signature.
-              </p>
-            </div>
+          <FormSection
+            title="Établissements ciblés"
+            description="Restreignez la quête à certains établissements ou laissez vide pour qu'elle soit globale. Les triggers de redondance bloquent toute configuration qui créerait un conflit avec une autre quête active de même signature."
+          >
             <EstablishmentsPicker
               value={establishments}
               onChange={(list) => setValue("establishments", list)}
               disabled={isSubmitting}
             />
-          </div>
+          </FormSection>
 
           {/* Récompenses */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Récompenses</h3>
-            <p className="text-sm text-muted-foreground">
-              Configurez au moins une récompense pour cette quête
-            </p>
-
+          <FormSection
+            title="Récompenses"
+            description="Configurez au moins une récompense pour cette quête."
+          >
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Template de coupon</Label>
@@ -628,10 +767,7 @@ export function QuestForm({
                   control={control}
                   name="couponTemplateId"
                   render={({ field }) => (
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
+                    <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Sélectionner un template" />
                       </SelectTrigger>
@@ -659,9 +795,7 @@ export function QuestForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="displayOrder">
-                  Ordre d&apos;affichage
-                </Label>
+                <Label htmlFor="displayOrder">Ordre d&apos;affichage</Label>
                 <Input
                   id="displayOrder"
                   type="number"
@@ -701,21 +835,165 @@ export function QuestForm({
                 </p>
               </div>
             </div>
-          </div>
+          </FormSection>
+
+          {/* Répétition selon le niveau */}
+          <FormSection
+            title="Répétition selon le niveau"
+            description="Désactivée par défaut. Si activée, les joueurs de rang élevé peuvent compléter la quête plusieurs fois par période. Le nombre d'itérations ajoutées ici fixe le maximum affiché côté joueur : chaque itération = une répétition supplémentaire possible (l'itération 1 = la configuration ci-dessus). Un joueur de rang inférieur en voit moins, mais jamais plus que ce qui est configuré ici."
+            action={
+              <Switch
+                checked={isRepeatable}
+                onCheckedChange={(checked) =>
+                  setValue("isRepeatable", checked)
+                }
+              />
+            }
+          >
+            {isRepeatable && (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Personnalisez l&apos;objectif et les gains des itérations
+                  suivantes. Champ vide = hérite de la quête de base. Le badge
+                  n&apos;est attribué qu&apos;une fois par période.
+                </p>
+
+                {iterations.map((row, idx) => (
+                  <div
+                    key={idx}
+                    className="space-y-3 rounded-lg border bg-background p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        Itération {idx + 2}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveIteration(idx)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs">
+                          Objectif {targetUnitLabel}
+                        </Label>
+                        <Input
+                          type="number"
+                          step={questType === "amount_spent" ? "0.01" : "1"}
+                          min={questType === "amount_spent" ? 0.01 : 1}
+                          placeholder={baseTargetValue || "hérite"}
+                          {...register(`iterations.${idx}.targetValue`)}
+                        />
+                        {errors.iterations?.[idx]?.targetValue && (
+                          <p className="text-xs text-destructive">
+                            {errors.iterations[idx]?.targetValue?.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-xs">Coupon</Label>
+                        <Controller
+                          control={control}
+                          name={`iterations.${idx}.couponTemplateId`}
+                          render={({ field }) => (
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={INHERIT_TEMPLATE}>
+                                  {baseCouponTemplateId &&
+                                  baseCouponTemplateId !== NONE_TEMPLATE
+                                    ? "Hériter (coupon de base)"
+                                    : "Hériter (aucun coupon)"}
+                                </SelectItem>
+                                {templates.map((template) => (
+                                  <SelectItem
+                                    key={template.id}
+                                    value={template.id.toString()}
+                                  >
+                                    {template.name}
+                                    {template.amount
+                                      ? ` (${formatCurrency(template.amount)})`
+                                      : template.percentage
+                                      ? ` (${template.percentage}%)`
+                                      : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-xs">Bonus XP</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder={baseBonusXp || "hérite"}
+                          {...register(`iterations.${idx}.bonusXp`)}
+                        />
+                        {errors.iterations?.[idx]?.bonusXp && (
+                          <p className="text-xs text-destructive">
+                            {errors.iterations[idx]?.bonusXp?.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-xs">Bonus Cashback (EUR)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder={baseBonusCashback || "hérite"}
+                          {...register(`iterations.${idx}.bonusCashback`)}
+                        />
+                        {errors.iterations?.[idx]?.bonusCashback && (
+                          <p className="text-xs text-destructive">
+                            {errors.iterations[idx]?.bonusCashback?.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddIteration}
+                >
+                  Ajouter une itération
+                </Button>
+              </div>
+            )}
+          </FormSection>
 
           {/* Activation */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label>Quête active</Label>
-              <p className="text-sm text-muted-foreground">
-                Sera visible et accessible par les utilisateurs
-              </p>
-            </div>
-            <Switch
-              checked={isActive}
-              onCheckedChange={(checked) => setValue("isActive", checked)}
-            />
-          </div>
+          <FormSection
+            title="Activation"
+            description="Sera visible et accessible par les utilisateurs."
+            action={
+              <Switch
+                checked={isActive}
+                onCheckedChange={(checked) => setValue("isActive", checked)}
+              />
+            }
+          >
+            {null}
+          </FormSection>
 
           {/* Actions */}
           <div className="flex justify-end gap-4">

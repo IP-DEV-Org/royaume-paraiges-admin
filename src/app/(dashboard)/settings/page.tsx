@@ -20,8 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Save, Percent, Wallet, Utensils } from "lucide-react";
+import { Loader2, Save, Percent, Wallet, Utensils, Repeat, X } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { useCurrentAdmin } from "@/components/providers/CurrentAdminProvider";
@@ -30,9 +31,13 @@ import {
   SETTING_KEYS,
   getQuestAlertRatioPct,
   getQuestReferencePrices,
+  getQuestRepeatConfig,
   updateAdminSetting,
   getAvgTicket12m,
+  DEFAULT_QUEST_REPEAT_LEVEL_TIERS,
   type QuestReferencePrices,
+  type QuestRepeatConfig,
+  type QuestRepeatLevelTier,
 } from "@/lib/services/adminSettingsService";
 import { adminSettingsKeys } from "@/lib/queries/keys";
 
@@ -128,6 +133,11 @@ function GeneralSettingsTab() {
     queryFn: getQuestReferencePrices,
   });
 
+  const { data: repeatConfig, isLoading: repeatLoading } = useQuery({
+    queryKey: adminSettingsKeys.questRepeatLevelTiers(),
+    queryFn: getQuestRepeatConfig,
+  });
+
   const { data: avgTicket } = useQuery({
     queryKey: adminSettingsKeys.avgTicket12m(),
     queryFn: getAvgTicket12m,
@@ -136,8 +146,10 @@ function GeneralSettingsTab() {
   if (
     ratioLoading ||
     pricesLoading ||
+    repeatLoading ||
     ratio === undefined ||
-    refPrices === undefined
+    refPrices === undefined ||
+    repeatConfig === undefined
   ) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -150,6 +162,7 @@ function GeneralSettingsTab() {
     <SettingsForm
       initialRatio={ratio}
       initialPrices={refPrices}
+      initialRepeatConfig={repeatConfig}
       avgTicketCents={avgTicket?.avg_ticket_cents ?? 0}
       avgTicketSample={avgTicket?.sample_size ?? 0}
     />
@@ -159,11 +172,13 @@ function GeneralSettingsTab() {
 function SettingsForm({
   initialRatio,
   initialPrices,
+  initialRepeatConfig,
   avgTicketCents,
   avgTicketSample,
 }: {
   initialRatio: number;
   initialPrices: QuestReferencePrices;
+  initialRepeatConfig: QuestRepeatConfig;
   avgTicketCents: number;
   avgTicketSample: number;
 }) {
@@ -180,17 +195,36 @@ function SettingsForm({
     boisson_chaude: centsToEuros(initialPrices.boisson_chaude),
     restauration: centsToEuros(initialPrices.restauration),
   });
+  const [repeatAuto, setRepeatAuto] = useState(
+    initialRepeatConfig.mode === "auto",
+  );
+  const [repeatTiers, setRepeatTiers] = useState<
+    { minLevel: string; maxCompletions: string }[]
+  >(
+    (initialRepeatConfig.mode === "manual"
+      ? initialRepeatConfig.tiers
+      : DEFAULT_QUEST_REPEAT_LEVEL_TIERS
+    ).map((t) => ({
+      minLevel: String(t.min_level),
+      maxCompletions: String(t.max_completions),
+    })),
+  );
 
   const saveMutation = useMutation({
     mutationFn: async (input: {
       ratio: number;
       referencePrices: QuestReferencePrices;
+      repeatValue: "auto" | QuestRepeatLevelTier[];
     }) => {
       await Promise.all([
         updateAdminSetting(SETTING_KEYS.QUEST_ALERT_RATIO_PCT, input.ratio),
         updateAdminSetting(
           SETTING_KEYS.QUEST_REFERENCE_PRICES_CENTS,
           input.referencePrices,
+        ),
+        updateAdminSetting(
+          SETTING_KEYS.QUEST_REPEAT_LEVEL_TIERS,
+          input.repeatValue,
         ),
       ]);
     },
@@ -203,6 +237,24 @@ function SettingsForm({
       toast.error("Impossible d'enregistrer les paramètres");
     },
   });
+
+  const handleAddTier = () => {
+    setRepeatTiers((prev) => [...prev, { minLevel: "", maxCompletions: "" }]);
+  };
+
+  const handleRemoveTier = (index: number) => {
+    setRepeatTiers((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleTierChange = (
+    index: number,
+    field: "minLevel" | "maxCompletions",
+    value: string,
+  ) => {
+    setRepeatTiers((prev) =>
+      prev.map((t, i) => (i === index ? { ...t, [field]: value } : t)),
+    );
+  };
 
   const handleSave = () => {
     const ratioValue = parseInt(ratioPct, 10);
@@ -227,7 +279,51 @@ function SettingsForm({
       referencePrices[key] = cents;
     }
 
-    saveMutation.mutate({ ratio: ratioValue, referencePrices });
+    // Répétition des défis : "auto" (lié aux rangs) ou barème manuel validé
+    // (niveaux 1-25 uniques, complétions >= 1, au moins un palier).
+    let repeatValue: "auto" | QuestRepeatLevelTier[] = "auto";
+    if (!repeatAuto) {
+      if (repeatTiers.length === 0) {
+        toast.error("Barème invalide", {
+          description: "Définissez au moins un palier (ex: niveau 1 → 1 complétion).",
+        });
+        return;
+      }
+      const parsedTiers: QuestRepeatLevelTier[] = [];
+      const seenLevels = new Set<number>();
+      for (const tier of repeatTiers) {
+        const minLevel = parseInt(tier.minLevel, 10);
+        const maxCompletions = parseInt(tier.maxCompletions, 10);
+        if (!Number.isFinite(minLevel) || minLevel < 1 || minLevel > 25) {
+          toast.error("Barème invalide", {
+            description: "Chaque palier doit avoir un niveau entre 1 et 25.",
+          });
+          return;
+        }
+        if (!Number.isFinite(maxCompletions) || maxCompletions < 1) {
+          toast.error("Barème invalide", {
+            description: "Le nombre de complétions doit être un entier >= 1.",
+          });
+          return;
+        }
+        if (seenLevels.has(minLevel)) {
+          toast.error("Barème invalide", {
+            description: `Le niveau ${minLevel} est défini deux fois.`,
+          });
+          return;
+        }
+        seenLevels.add(minLevel);
+        parsedTiers.push({ min_level: minLevel, max_completions: maxCompletions });
+      }
+      parsedTiers.sort((a, b) => a.min_level - b.min_level);
+      repeatValue = parsedTiers;
+    }
+
+    saveMutation.mutate({
+      ratio: ratioValue,
+      referencePrices,
+      repeatValue,
+    });
   };
 
   return (
@@ -326,6 +422,96 @@ function SettingsForm({
               </div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Repeat className="h-5 w-5" />
+            Répétition des défis
+          </CardTitle>
+          <CardDescription>
+            Nombre maximum de fois qu&apos;un joueur peut compléter un même
+            défi sur une période. Ne concerne que les quêtes marquées
+            « répétables ». Par défaut, le plafond suit le <strong>rang</strong>{" "}
+            du joueur : rang 1 (Écuyer) → 1 fois, rang 2 (Soldat) → 2 fois,
+            etc. — toute modification des rangs (page Storytelling) est
+            automatiquement répercutée.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label>Barème automatique lié aux rangs</Label>
+              <p className="text-xs text-muted-foreground">
+                Rang N → N complétions par période. Désactivez pour définir un
+                barème manuel par niveau.
+              </p>
+            </div>
+            <Switch checked={repeatAuto} onCheckedChange={setRepeatAuto} />
+          </div>
+
+          {!repeatAuto && (
+            <div className="space-y-3">
+          {repeatTiers.map((tier, idx) => (
+            <div key={idx} className="flex items-end gap-3">
+              <div className="space-y-2">
+                <Label htmlFor={`tier-level-${idx}`}>À partir du niveau</Label>
+                <Input
+                  id={`tier-level-${idx}`}
+                  type="number"
+                  min={1}
+                  max={25}
+                  step={1}
+                  placeholder="1"
+                  value={tier.minLevel}
+                  onChange={(e) =>
+                    handleTierChange(idx, "minLevel", e.target.value)
+                  }
+                  className="max-w-32"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`tier-completions-${idx}`}>
+                  Complétions max / période
+                </Label>
+                <Input
+                  id={`tier-completions-${idx}`}
+                  type="number"
+                  min={1}
+                  step={1}
+                  placeholder="1"
+                  value={tier.maxCompletions}
+                  onChange={(e) =>
+                    handleTierChange(idx, "maxCompletions", e.target.value)
+                  }
+                  className="max-w-32"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => handleRemoveTier(idx)}
+                disabled={repeatTiers.length <= 1}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+
+          <Button type="button" variant="outline" size="sm" onClick={handleAddTier}>
+            Ajouter un palier
+          </Button>
+
+          <p className="text-xs text-muted-foreground">
+            Le palier de plus haut niveau atteint s&apos;applique. En
+            l&apos;absence de palier atteint, le joueur ne peut compléter le
+            défi qu&apos;une seule fois (comportement historique).
+          </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

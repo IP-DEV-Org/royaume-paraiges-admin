@@ -25,6 +25,11 @@ export type QuestPeriod = Database["public"]["Tables"]["quest_periods"]["Row"];
 export type QuestPeriodInsert = Database["public"]["Tables"]["quest_periods"]["Insert"];
 export type QuestCompletionLog = Database["public"]["Tables"]["quest_completion_logs"]["Row"];
 
+// Overrides par itération des quêtes répétables (migration 066).
+// Itération 1 = la quête elle-même ; chaque champ NULL hérite de la quête de base.
+export type QuestIteration = Database["public"]["Tables"]["quest_iterations"]["Row"];
+export type QuestIterationInsert = Database["public"]["Tables"]["quest_iterations"]["Insert"];
+
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
@@ -56,6 +61,7 @@ export type QuestWithRelations = Quest & {
   coupon_templates?: Pick<CouponTemplate, "id" | "name" | "amount" | "percentage"> | null;
   badge_types?: Pick<BadgeType, "id" | "name" | "icon" | "rarity"> | null;
   quest_periods?: QuestPeriod[];
+  quest_iterations?: QuestIteration[];
 };
 
 // Content tables — Update helpers (utilisés par contentService)
