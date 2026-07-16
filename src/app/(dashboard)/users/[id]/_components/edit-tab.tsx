@@ -45,12 +45,20 @@ interface EditTabProps {
   establishments: Establishment[];
 }
 
+const ROLE_LABELS: Record<UserRole, string> = {
+  client: "Client",
+  employee: "Employé",
+  establishment: "Établissement",
+  admin: "Administrateur",
+};
+
 export function EditTab({ user, establishments }: EditTabProps) {
   const queryClient = useQueryClient();
 
-  // Seul un super-admin peut modifier le rôle (garde-fou BDD : trg_protect_role,
-  // migration 060). On désactive le sélecteur pour les autres afin d'éviter une
-  // erreur serveur générique au submit.
+  // Garde-fou BDD : trg_protect_role (migration 064). Un admin peut basculer un
+  // compte entre client et employé ; les rôles admin/establishment restent
+  // réservés au super-admin. On reflète la règle ici pour éviter une erreur
+  // serveur au submit.
   const { data: isSuperAdmin = false } = useQuery({
     queryKey: userKeys.isSuperAdmin(),
     queryFn: getIsCurrentUserSuperAdmin,
@@ -66,6 +74,25 @@ export function EditTab({ user, establishments }: EditTabProps) {
     attachedEstablishmentId: user.attachedEstablishmentId?.toString() || "",
   });
 
+  const canEditRole =
+    isSuperAdmin || user.role === "client" || user.role === "employee";
+
+  // Miroir de trg_protect_role. Sur un profil admin/establishment édité par un
+  // admin non super, on n'expose que le rôle courant pour que le Select reste
+  // lisible malgré le disabled.
+  const roleOptions: UserRole[] = isSuperAdmin
+    ? ["client", "employee", "establishment", "admin"]
+    : canEditRole
+      ? ["client", "employee"]
+      : [user.role];
+
+  // Contrainte BDD profiles_staff_requires_establishment (migrations 064/065) :
+  // tout compte du personnel doit être rattaché à un établissement.
+  const requiresEstablishment =
+    form.role === "employee" || form.role === "establishment";
+  const establishmentMissing =
+    requiresEstablishment && !form.attachedEstablishmentId;
+
   const updateMutation = useMutation({
     mutationFn: () =>
       updateUser(user.id, {
@@ -80,9 +107,15 @@ export function EditTab({ user, establishments }: EditTabProps) {
       toast.success("Utilisateur mis a jour");
       queryClient.invalidateQueries({ queryKey: userKeys.all });
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      const code = (error as { code?: string })?.code;
       toast.error("Erreur", {
-        description: "Impossible de mettre a jour l'utilisateur",
+        description:
+          code === "42501"
+            ? "Seul un super-administrateur peut attribuer ce rôle."
+            : code === "23514"
+              ? "Un compte employé ou établissement doit être rattaché à un établissement."
+              : "Impossible de mettre a jour l'utilisateur",
       });
     },
   });
@@ -159,16 +192,17 @@ export function EditTab({ user, establishments }: EditTabProps) {
               <Select
                 value={form.role}
                 onValueChange={(value: UserRole) => setForm({ ...form, role: value })}
-                disabled={!isSuperAdmin}
+                disabled={!canEditRole}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="client">Client</SelectItem>
-                  <SelectItem value="employee">Employé</SelectItem>
-                  <SelectItem value="establishment">Établissement</SelectItem>
-                  <SelectItem value="admin">Administrateur</SelectItem>
+                  {roleOptions.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {ROLE_LABELS[role]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <div className="text-xs text-muted-foreground flex items-center gap-2">
@@ -176,28 +210,28 @@ export function EditTab({ user, establishments }: EditTabProps) {
               </div>
               {!isSuperAdmin && (
                 <p className="text-xs text-muted-foreground">
-                  Seul un super-administrateur peut modifier le rôle d’un compte.
+                  {canEditRole
+                    ? "Vous pouvez basculer ce compte entre client et employé. Les rôles administrateur et établissement sont réservés à un super-administrateur."
+                    : "Seul un super-administrateur peut modifier le rôle d’un compte administrateur ou établissement."}
                 </p>
               )}
             </div>
 
-            {(form.role === "employee" || form.role === "establishment") && (
+            {requiresEstablishment && (
               <div className="space-y-2">
-                <Label htmlFor="attachedEstablishment">Établissement de reference</Label>
+                <Label htmlFor="attachedEstablishment">
+                  Établissement de reference *
+                </Label>
                 <Select
                   value={form.attachedEstablishmentId}
                   onValueChange={(value) =>
-                    setForm({
-                      ...form,
-                      attachedEstablishmentId: value === "none" ? "" : value,
-                    })
+                    setForm({ ...form, attachedEstablishmentId: value })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner un établissement" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Aucun établissement</SelectItem>
                     {establishments.map((establishment) => (
                       <SelectItem key={establishment.id} value={establishment.id.toString()}>
                         {establishment.title}
@@ -205,14 +239,24 @@ export function EditTab({ user, establishments }: EditTabProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Établissement de reference de cet employe/gérant
-                </p>
+                {establishmentMissing ? (
+                  <p className="text-xs text-destructive">
+                    Un compte employé ou établissement doit être rattaché à un
+                    établissement.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Établissement de reference de cet employe/gérant
+                  </p>
+                )}
               </div>
             )}
 
             <div className="flex justify-end gap-4 pt-4">
-              <Button type="submit" disabled={updateMutation.isPending}>
+              <Button
+                type="submit"
+                disabled={updateMutation.isPending || establishmentMissing}
+              >
                 {updateMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
